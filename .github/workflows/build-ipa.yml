@@ -40,27 +40,14 @@ jobs:
       - name: Create iOS project files
         run: flutter create --platforms=ios .
 
-      - name: Allow HTTP for local server (NSAllowsArbitraryLoads)
+      - name: Allow HTTP for local server (ATS patch)
         run: |
           PLIST="ios/Runner/Info.plist"
-          if ! grep -q 'NSAllowsArbitraryLoads' "$PLIST"; then
-            # Insert ATS exception before the closing </dict></plist>
-            sed -i '' 's|</dict>\n</plist>||' "$PLIST" || true
-            cat >> "$PLIST" << 'PLIST_EOF'
-\t<key>NSAppTransportSecurity</key>
-\t<dict>
-\t\t<key>NSAllowsArbitraryLoads</key>
-\t\t<true/>
-\t\t<key>NSAllowsLocalNetworking</key>
-\t\t<true/>
-\t</dict>
-</dict>
-</plist>
-PLIST_EOF
-            echo "ATS patch applied"
-          else
-            echo "ATS already configured"
-          fi
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity dict" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsArbitraryLoads bool true" "$PLIST" 2>/dev/null || true
+          /usr/libexec/PlistBuddy -c "Add :NSAppTransportSecurity:NSAllowsLocalNetworking bool true" "$PLIST" 2>/dev/null || true
+          echo "ATS patch done:"
+          /usr/libexec/PlistBuddy -c "Print :NSAppTransportSecurity" "$PLIST"
 
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
