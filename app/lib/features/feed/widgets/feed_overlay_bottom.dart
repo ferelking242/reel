@@ -1,7 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:watchtower_real/core/theme/tokens.dart';
-import 'package:watchtower_real/features/feed/data/mock_feed.dart';
 import 'package:watchtower_real/features/feed/providers/feed_provider.dart';
 
 // ─── From mock FeedItem ───────────────────────────────────────────────────────

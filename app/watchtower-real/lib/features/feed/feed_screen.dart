@@ -4,7 +4,6 @@ import 'package:flutter_hooks/flutter_hooks.dart';
 import 'package:hooks_riverpod/hooks_riverpod.dart';
 import 'package:skeletonizer/skeletonizer.dart';
 import '../../core/theme/tokens.dart';
-import 'data/mock_feed.dart';
 import 'models/feed_item.dart';
 import 'providers/feed_provider.dart';
 import 'package:go_router/go_router.dart';

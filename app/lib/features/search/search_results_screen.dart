@@ -3,7 +3,6 @@ import 'package:flutter/material.dart';
 import 'package:watchtower_real/core/theme/tokens.dart';
 import 'package:watchtower_real/core/widgets/follow_button.dart';
 import 'package:watchtower_real/core/widgets/video_thumbnail.dart';
-import 'package:watchtower_real/features/feed/data/mock_feed.dart';
 import 'package:watchtower_real/features/search/search_filters_sheet.dart';
 
 class SearchResultsScreen extends StatefulWidget {

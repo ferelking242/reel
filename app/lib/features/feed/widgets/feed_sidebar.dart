@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:watchtower_real/core/widgets/avatar.dart';
-import 'package:watchtower_real/features/feed/data/mock_feed.dart';
 import 'package:watchtower_real/features/feed/providers/feed_provider.dart';
 
 /// Format a count the TikTok way: 263 → "263", 5919 → "5.9K", 256K → "256K", 1.1M

@@ -1,7 +1,6 @@
 import 'dart:math';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/feed_item.dart';
-import '../data/mock_feed.dart';
 import '../../../remote/remote_client.dart';
 import '../../../remote/remote_config_provider.dart';
 import '../../../utils/log/app_file_logger.dart';
@@ -35,10 +34,10 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     final client = ref.watch(remoteClientProvider);
 
     if (client == null) {
-      logger.log(_tag, 'Pas de client configuré → données mock');
+      logger.log(_tag, 'Pas de client configuré → liste vide');
       ref.read(serverStatusProvider.notifier).state =
-          'Aucun serveur configuré — données démo';
-      return mockFeedItems;
+          'Aucun serveur configuré — configure un serveur pour voir du contenu';
+      return [];
     }
 
     logger.log(_tag, 'Client configuré (${client.baseUrl}) → chargement réel');
@@ -70,10 +69,8 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     }
 
     if (sources.isEmpty) {
-      logger.log(_tag, 'Aucune source disponible → mock');
-      ref.read(serverStatusProvider.notifier).state =
-          'Aucune source disponible sur le serveur';
-      return mockFeedItems;
+      logger.log(_tag, 'Aucune source disponible');
+      throw Exception('Le serveur ne retourne aucune source (/api/sources vide)');
     }
 
     // 2. Choisir la meilleure source (préférer vidéo)
@@ -87,10 +84,8 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     logger.log(_tag, '${rawItems.length} items bruts reçus');
 
     if (rawItems.isEmpty) {
-      logger.log(_tag, 'Aucun item → mock');
-      ref.read(serverStatusProvider.notifier).state =
-          'Source "$sourceName" ne retourne aucun contenu';
-      return mockFeedItems;
+      logger.log(_tag, 'Aucun item reçu');
+      throw Exception('La source "$sourceName" ne retourne aucun contenu');
     }
 
     // 4. Résoudre les URLs vidéo pour les N premiers items
@@ -121,10 +116,8 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     logger.log(_tag, '${items.length} items avec vidéo résolue');
 
     if (items.isEmpty) {
-      logger.log(_tag, 'Aucune vidéo résolue → mock');
-      ref.read(serverStatusProvider.notifier).state =
-          'Impossible de résoudre les vidéos pour "$sourceName"';
-      return mockFeedItems;
+      logger.log(_tag, 'Aucune vidéo résolue');
+      throw Exception('Aucune vidéo jouable trouvée pour "$sourceName"');
     }
 
     ref.read(serverStatusProvider.notifier).state =
@@ -163,12 +156,15 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     return all.first;
   }
 
-  /// Extrait l'identifiant à utiliser dans les routes API
+  /// Extrait l'identifiant à utiliser dans les routes API.
+  /// Préfère l'id (ex: "local") car c'est ce que le serveur utilise dans ses routes.
+  /// L'id est URL-safe (pas d'espace), contrairement au name ("Watchtower Local").
   String _sourceId(Map<String, dynamic> source) {
-    // Préférer name (le serveur fait findSource par name aussi)
+    final id = source['id'];
+    if (id != null && id.toString().isNotEmpty) return id.toString();
     final name = source['name'] as String?;
-    if (name != null && name.isNotEmpty) return name;
-    return source['id']?.toString() ?? '1';
+    if (name != null && name.isNotEmpty) return Uri.encodeComponent(name);
+    return '1';
   }
 
   /// Charge popular, retombe sur latest sur TOUTE erreur (y compris 404)
