@@ -67,6 +67,23 @@ jobs:
             echo "ios/ scaffold already present"
           fi
 
+      # ── Désactiver complètement le codesigning (Xcode 16 ignore --no-codesign) ──
+      - name: Disable code signing in Xcode project
+        run: |
+          PBXPROJ="ios/Runner.xcodeproj/project.pbxproj"
+          # Vider le Development Team
+          sed -i '' 's/DEVELOPMENT_TEAM = [^;]*;/DEVELOPMENT_TEAM = "";/g' "$PBXPROJ"
+          # Désactiver la signature obligatoire
+          sed -i '' 's/CODE_SIGNING_REQUIRED = YES/CODE_SIGNING_REQUIRED = NO/g' "$PBXPROJ"
+          sed -i '' 's/CODE_SIGNING_ALLOWED = YES/CODE_SIGNING_ALLOWED = NO/g' "$PBXPROJ"
+          # Vider l'identité de signature
+          sed -i '' 's/CODE_SIGN_IDENTITY = ".*"/CODE_SIGN_IDENTITY = ""/g' "$PBXPROJ"
+          sed -i '' 's/CODE_SIGN_IDENTITY = [^;]*;/CODE_SIGN_IDENTITY = "";/g' "$PBXPROJ"
+          # Passer en manuel (pas automatique)
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic/CODE_SIGN_STYLE = Manual/g' "$PBXPROJ"
+          echo "Code signing patch done."
+          grep -E "CODE_SIGN|DEVELOPMENT_TEAM" "$PBXPROJ" | sort -u || true
+
       # ── Deployment target iOS 15.0 (compatible 15.8.5 + TrollStore) ────────
       - name: Set iOS deployment target → 15.0
         run: |
@@ -113,7 +130,14 @@ jobs:
           flutter build ios \
             --release \
             --no-codesign \
-            --dart-define=FLUTTER_TARGET_PLATFORM=ios
+            --dart-define=FLUTTER_TARGET_PLATFORM=ios \
+            --build-number=${{ steps.ver.outputs.code }} \
+            --build-name=${{ steps.ver.outputs.name }}
+        env:
+          CODE_SIGNING_REQUIRED: "NO"
+          CODE_SIGNING_ALLOWED: "NO"
+          CODE_SIGN_IDENTITY: ""
+          DEVELOPMENT_TEAM: ""
 
       # ── Package → .tipa (= IPA renommé, format TrollStore) ─────────────────
       - name: Package .tipa for TrollStore
