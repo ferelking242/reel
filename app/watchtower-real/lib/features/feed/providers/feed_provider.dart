@@ -1,10 +1,12 @@
 import 'dart:math';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/feed_item.dart';
 import '../data/mock_feed.dart';
 import '../../../remote/remote_client.dart';
 import '../../../remote/remote_config_provider.dart';
+import '../../../utils/log/app_file_logger.dart';
+
+const _tag = 'FeedProvider';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Index de la page active
@@ -33,13 +35,13 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     final client = ref.watch(remoteClientProvider);
 
     if (client == null) {
-      debugPrint('[FeedProvider] Pas de client configuré → données mock');
+      logger.log(_tag, 'Pas de client configuré → données mock');
       ref.read(serverStatusProvider.notifier).state =
           'Aucun serveur configuré — données démo';
       return mockFeedItems;
     }
 
-    debugPrint('[FeedProvider] Client configuré (${client.baseUrl}) → chargement réel');
+    logger.log(_tag, 'Client configuré (${client.baseUrl}) → chargement réel');
     ref.read(serverStatusProvider.notifier).state = null;
     return _loadFromServer(client);
   }
@@ -53,22 +55,22 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   // ── Chargement depuis le serveur ──────────────────────────────────────────
   Future<List<FeedItem>> _loadFromServer(RemoteApiClient client) async {
     // 1. Lister les sources
-    debugPrint('[FeedProvider] GET /api/sources…');
+    logger.log(_tag, 'GET /api/sources…');
     final List<dynamic> sources;
     try {
       sources = await client.sources().timeout(const Duration(seconds: 15));
-      debugPrint('[FeedProvider] ${sources.length} sources reçues');
+      logger.log(_tag, '${sources.length} sources reçues');
       for (var s in sources) {
-        debugPrint(
+        logger.log(_tag,
             '  source: id=${s["id"]} name="${s["name"]}" lang=${s["lang"]} type=${s["itemType"]}');
       }
     } catch (e, st) {
-      debugPrint('[FeedProvider] Erreur /api/sources: $e\n$st');
+      logger.error(_tag, 'Erreur /api/sources: $e', st);
       throw Exception('Impossible de contacter le serveur : $e');
     }
 
     if (sources.isEmpty) {
-      debugPrint('[FeedProvider] Aucune source disponible → mock');
+      logger.log(_tag, 'Aucune source disponible → mock');
       ref.read(serverStatusProvider.notifier).state =
           'Aucune source disponible sur le serveur';
       return mockFeedItems;
@@ -78,14 +80,14 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     final source = _pickSource(sources);
     final sourceId = _sourceId(source);
     final sourceName = source['name'] as String? ?? sourceId;
-    debugPrint('[FeedProvider] Source choisie: "$sourceName" (id=$sourceId)');
+    logger.log(_tag, 'Source choisie: "$sourceName" (id=$sourceId)');
 
     // 3. Charger popular, fallback latest sur toute erreur
     final List<dynamic> rawItems = await _fetchItems(client, sourceId);
-    debugPrint('[FeedProvider] ${rawItems.length} items bruts reçus');
+    logger.log(_tag, '${rawItems.length} items bruts reçus');
 
     if (rawItems.isEmpty) {
-      debugPrint('[FeedProvider] Aucun item → mock');
+      logger.log(_tag, 'Aucun item → mock');
       ref.read(serverStatusProvider.notifier).state =
           'Source "$sourceName" ne retourne aucun contenu';
       return mockFeedItems;
@@ -94,13 +96,14 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     // 4. Résoudre les URLs vidéo pour les N premiers items
     const maxItems = 8;
     final toResolve = rawItems.take(maxItems).toList();
-    debugPrint('[FeedProvider] Résolution des URLs vidéo pour ${toResolve.length} items…');
+    logger.log(_tag, 'Résolution des URLs vidéo pour ${toResolve.length} items…');
 
     final items = <FeedItem>[];
     for (var i = 0; i < toResolve.length; i++) {
       final raw = toResolve[i] as Map<String, dynamic>;
       final link = raw['link'] as String? ?? raw['url'] as String? ?? '';
-      debugPrint('[FeedProvider] [$i] link="${link.substring(0, link.length.clamp(0, 80))}"');
+      logger.log(_tag,
+          '[$i] link="${link.substring(0, link.length.clamp(0, 80))}"');
 
       String videoUrl = '';
       if (link.isNotEmpty) {
@@ -108,17 +111,17 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       }
 
       if (videoUrl.isEmpty) {
-        debugPrint('[FeedProvider] [$i] Pas de vidéo → ignoré');
+        logger.log(_tag, '[$i] Pas de vidéo → ignoré');
         continue;
       }
 
       items.add(_toFeedItem(raw, source, videoUrl, i));
     }
 
-    debugPrint('[FeedProvider] ${items.length} items avec vidéo résolue');
+    logger.log(_tag, '${items.length} items avec vidéo résolue');
 
     if (items.isEmpty) {
-      debugPrint('[FeedProvider] Aucune vidéo résolue → mock');
+      logger.log(_tag, 'Aucune vidéo résolue → mock');
       ref.read(serverStatusProvider.notifier).state =
           'Impossible de résoudre les vidéos pour "$sourceName"';
       return mockFeedItems;
@@ -131,14 +134,33 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
 
   // ── Helpers ────────────────────────────────────────────────────────────────
 
-  /// Choisit la meilleure source (préfère itemType=video/anime)
+  /// Choisit la meilleure source (préfère itemType=video/anime).
+  /// itemType dans mangayomi : 0=manga, 1=novel, 2=anime/video
   Map<String, dynamic> _pickSource(List<dynamic> sources) {
-    final videoTypes = {'video', 'anime', 'live', 'movie'};
-    for (final s in sources.cast<Map<String, dynamic>>()) {
-      final type = (s['itemType'] as String? ?? '').toLowerCase();
-      if (videoTypes.any((t) => type.contains(t))) return s;
+    final all = sources.cast<Map<String, dynamic>>();
+
+    // Priorité 1 : itemType numérique == 2 (anime/vidéo dans mangayomi)
+    for (final s in all) {
+      final t = s['itemType'];
+      if (t == 2 || t == '2') {
+        logger.log(_tag, '_pickSource → itemType==2: ${s["name"]}');
+        return s;
+      }
     }
-    return sources.first as Map<String, dynamic>;
+
+    // Priorité 2 : champ texte contenant "video"/"anime"/"live"/"movie"
+    const videoTypes = {'video', 'anime', 'live', 'movie'};
+    for (final s in all) {
+      final type = (s['itemType'] as String? ?? '').toLowerCase();
+      if (videoTypes.any((t) => type.contains(t))) {
+        logger.log(_tag, '_pickSource → type text "$type": ${s["name"]}');
+        return s;
+      }
+    }
+
+    // Fallback : première source disponible
+    logger.log(_tag, '_pickSource → fallback first: ${all.first["name"]}');
+    return all.first;
   }
 
   /// Extrait l'identifiant à utiliser dans les routes API
@@ -154,29 +176,29 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       RemoteApiClient client, String sourceId) async {
     // Essai popular
     try {
-      debugPrint('[FeedProvider] GET popular/$sourceId…');
+      logger.log(_tag, 'GET popular/$sourceId…');
       final data = await client
           .popular(sourceId)
           .timeout(const Duration(seconds: 20));
       final items = _extractItems(data);
-      debugPrint('[FeedProvider] popular/$sourceId → ${items.length} items');
+      logger.log(_tag, 'popular/$sourceId → ${items.length} items');
       if (items.isNotEmpty) return items;
-      debugPrint('[FeedProvider] popular vide → essai latest');
+      logger.log(_tag, 'popular vide → essai latest');
     } catch (e) {
-      debugPrint('[FeedProvider] popular/$sourceId erreur: $e → essai latest');
+      logger.log(_tag, 'popular/$sourceId erreur: $e → essai latest');
     }
 
     // Fallback latest
     try {
-      debugPrint('[FeedProvider] GET latest/$sourceId…');
+      logger.log(_tag, 'GET latest/$sourceId…');
       final data = await client
           .latest(sourceId)
           .timeout(const Duration(seconds: 20));
       final items = _extractItems(data);
-      debugPrint('[FeedProvider] latest/$sourceId → ${items.length} items');
+      logger.log(_tag, 'latest/$sourceId → ${items.length} items');
       return items;
     } catch (e) {
-      debugPrint('[FeedProvider] latest/$sourceId erreur: $e');
+      logger.error(_tag, 'latest/$sourceId erreur: $e');
       throw Exception('popular + latest ont échoué pour $sourceId : $e');
     }
   }
@@ -197,23 +219,28 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       RemoteApiClient client, String sourceId, String itemLink) async {
     // Étape 1 : videos directement sur le lien de l'item
     try {
-      debugPrint('[FeedProvider] videos?url=${itemLink.substring(0, itemLink.length.clamp(0, 80))}');
-      final data =
-          await client.videos(sourceId, itemLink).timeout(const Duration(seconds: 20));
+      logger.log(_tag,
+          'videos?url=${itemLink.substring(0, itemLink.length.clamp(0, 80))}');
+      final data = await client
+          .videos(sourceId, itemLink)
+          .timeout(const Duration(seconds: 20));
       final vids = data['videos'] as List? ?? [];
-      debugPrint('[FeedProvider] ${vids.length} streams directs');
+      logger.log(_tag, '${vids.length} streams directs');
       for (var v in vids) {
-        debugPrint('  stream: quality="${v["quality"]}" url="${(v["url"] as String? ?? "").substring(0, (v["url"] as String? ?? "").length.clamp(0, 80))}"');
+        final u = (v['url'] as String? ?? '');
+        logger.log(_tag,
+            '  stream: quality="${v["quality"]}" url="${u.substring(0, u.length.clamp(0, 80))}"');
       }
       final url = _bestVideoUrl(vids);
       if (url != null) return url;
     } catch (e) {
-      debugPrint('[FeedProvider] videos direct échoué: $e');
+      logger.log(_tag, 'videos direct échoué: $e');
     }
 
     // Étape 2 : detail → premier épisode → videos
     try {
-      debugPrint('[FeedProvider] detail?url=${itemLink.substring(0, itemLink.length.clamp(0, 80))}');
+      logger.log(_tag,
+          'detail?url=${itemLink.substring(0, itemLink.length.clamp(0, 80))}');
       final detail = await client
           .detail(sourceId, itemLink)
           .timeout(const Duration(seconds: 20));
@@ -222,7 +249,7 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
           detail['episodes'] as List? ??
           detail['chapter_list'] as List? ??
           [];
-      debugPrint('[FeedProvider] ${chapters.length} chapitres/épisodes dans detail');
+      logger.log(_tag, '${chapters.length} chapitres/épisodes dans detail');
 
       if (chapters.isEmpty) return null;
 
@@ -233,19 +260,20 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
           ep['chapterUrl'] as String? ??
           '';
       if (epUrl.isEmpty) {
-        debugPrint('[FeedProvider] Épisode sans URL');
+        logger.log(_tag, 'Épisode sans URL');
         return null;
       }
-      debugPrint('[FeedProvider] Episode URL: ${epUrl.substring(0, epUrl.length.clamp(0, 80))}');
+      logger.log(_tag,
+          'Episode URL: ${epUrl.substring(0, epUrl.length.clamp(0, 80))}');
 
       final vidData = await client
           .videos(sourceId, epUrl)
           .timeout(const Duration(seconds: 20));
       final vids = vidData['videos'] as List? ?? [];
-      debugPrint('[FeedProvider] ${vids.length} streams via detail');
+      logger.log(_tag, '${vids.length} streams via detail');
       return _bestVideoUrl(vids);
     } catch (e) {
-      debugPrint('[FeedProvider] detail flow échoué: $e');
+      logger.log(_tag, 'detail flow échoué: $e');
     }
 
     return null;
@@ -254,7 +282,7 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   /// Choisit la meilleure qualité vidéo disponible
   String? _bestVideoUrl(List<dynamic> videos) {
     if (videos.isEmpty) return null;
-    // Préférer 720p ou 1080p, sinon prendre le premier
+    // Préférer 1080p, 720p, 480p, sinon prendre le premier
     for (final pref in ['1080', '720', '480']) {
       for (final v in videos) {
         final q = (v['quality'] as String? ?? '').toLowerCase();
@@ -270,7 +298,10 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
 
   /// Convertit un item brut de l'API en FeedItem
   FeedItem _toFeedItem(
-      Map<String, dynamic> raw, Map<String, dynamic> source, String videoUrl, int index) {
+      Map<String, dynamic> raw,
+      Map<String, dynamic> source,
+      String videoUrl,
+      int index) {
     final title = raw['name'] as String? ??
         raw['title'] as String? ??
         raw['chapter_name'] as String? ??

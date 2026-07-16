@@ -1,6 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+import 'package:watchtower_real/remote/app_version.dart';
+import 'package:watchtower_real/utils/log/app_file_logger.dart';
 
 /// Minimal HTTP client for the Watchtower remote API server.
 /// Configure [baseUrl] and [apiKey] before use.
@@ -12,6 +14,7 @@ class RemoteApiClient {
 
   Map<String, String> get _headers => {
         'Content-Type': 'application/json',
+        'X-App-Version': AppVersion.headerValue,
         if (apiKey != null && apiKey!.isNotEmpty) 'Authorization': 'Bearer $apiKey',
       };
 
@@ -37,38 +40,40 @@ class RemoteApiClient {
 
   Future<Map<String, dynamic>> _get(String path) async {
     final uri = Uri.parse('$baseUrl$path');
-    debugPrint('[RemoteClient] GET $uri');
+    final tag = 'RemoteClient';
+    logger.log(tag, 'GET $uri  [v${AppVersion.headerValue}]');
     final t0 = DateTime.now();
 
     final http.Response res;
     try {
       res = await http.get(uri, headers: _headers);
-    } catch (e) {
-      debugPrint('[RemoteClient] NETWORK ERROR: $e');
+    } catch (e, st) {
+      logger.error(tag, 'NETWORK ERROR: $e', st);
       rethrow;
     }
 
     final ms = DateTime.now().difference(t0).inMilliseconds;
-    debugPrint('[RemoteClient] ${res.statusCode} $path (${ms}ms) — ${res.body.length} bytes');
+    logger.log(tag, '${res.statusCode} $path  (${ms}ms — ${res.body.length}B)');
 
     if (res.statusCode == 429) {
-      debugPrint('[RemoteClient] Rate limited (429)');
+      logger.log(tag, 'Rate limited (429)');
       throw Exception('Rate limited (429) — attends un moment');
     }
     if (res.statusCode == 401) {
-      debugPrint('[RemoteClient] Unauthorized (401) — vérifie la clé API');
+      logger.log(tag, 'Unauthorized (401) — vérifie la clé API');
       throw Exception('Unauthorized (401) — clé API incorrecte');
     }
     if (res.statusCode != 200) {
-      debugPrint('[RemoteClient] HTTP Error ${res.statusCode}: ${res.body.substring(0, res.body.length.clamp(0, 500))}');
+      final body = res.body.substring(0, res.body.length.clamp(0, 500));
+      logger.log(tag, 'HTTP Error ${res.statusCode}: $body');
       throw Exception('HTTP ${res.statusCode}: ${res.body}');
     }
 
     try {
       final decoded = json.decode(res.body) as Map<String, dynamic>;
       return decoded;
-    } catch (e) {
-      debugPrint('[RemoteClient] JSON parse error: $e\nBody: ${res.body.substring(0, res.body.length.clamp(0, 200))}');
+    } catch (e, st) {
+      logger.error(tag, 'JSON parse error: $e | body: ${res.body.substring(0, res.body.length.clamp(0, 200))}', st);
       throw Exception('Réponse JSON invalide: $e');
     }
   }

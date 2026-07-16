@@ -14,7 +14,8 @@ const RESET = '\x1b[0m', GREEN = '\x1b[32m', YELLOW = '\x1b[33m',
 app.use((req, res, next) => {
   const start = Date.now();
   const ip = req.headers['x-forwarded-for'] || req.socket?.remoteAddress || '?';
-  process.stdout.write(`${DIM}[REQ]${RESET} ${CYAN}${req.method}${RESET} ${req.url}  (${ip})\n`);
+  const appVersion = req.headers['x-app-version'] || '—';
+  process.stdout.write(`${DIM}[REQ]${RESET} ${CYAN}${req.method}${RESET} ${req.url}  (${ip}) app=${appVersion}\n`);
 
   // Wrap res.json to log status + timing
   const origJson = res.json.bind(res);
