@@ -18,81 +18,8 @@ class _Comment {
   final List<_Comment> replies;
 }
 
-// ─── Mock data ────────────────────────────────────────────────────────────────
-List<_Comment> _mockComments(int count) => [
-      const _Comment(
-        id: '1',
-        avatar: 'https://i.pravatar.cc/150?img=10',
-        username: 'Abdou',
-        text: '«Je suis complètement d\'accord avec toi sur ce point 🔥»',
-        date: '06-18',
-        likes: 1909,
-        replies: [
-          _Comment(
-            id: '1r1',
-            avatar: 'https://i.pravatar.cc/150?img=20',
-            username: 'Idriss',
-            text: 'Exactement ce que je pensais aussi 💯',
-            date: '06-18',
-            likes: 140,
-          ),
-        ],
-      ),
-      const _Comment(
-        id: '2',
-        avatar: 'https://i.pravatar.cc/150?img=30',
-        username: 'lsv_Requiem🔱',
-        text: 'T\'as vu la dernière ? Complètement incroyable bcp plus fort que prévu',
-        date: '06-18',
-        likes: 10,
-        replies: [],
-      ),
-      const _Comment(
-        id: '3',
-        avatar: 'https://i.pravatar.cc/150?img=40',
-        username: 'pedяo🇲🇦',
-        text: 'Il arrive et il flop sa première saison complète. On attendait mieux 😅',
-        date: '06-18',
-        likes: 140,
-        replies: [
-          _Comment(
-            id: '3r1',
-            avatar: 'https://i.pravatar.cc/150?img=50',
-            username: 'Samba_75',
-            text: 'Bah il a quand même mis 18 buts hein 😂',
-            date: '06-19',
-            likes: 74,
-          ),
-        ],
-      ),
-      const _Comment(
-        id: '4',
-        avatar: 'https://i.pravatar.cc/150?img=60',
-        username: 'Adamyousfi',
-        text: 'Ça fait longtemps qu\'il a rattrapé, il a ralenti juste pour que l\'autre puisse le rattraper un peu',
-        date: '06-18',
-        likes: 45,
-        replies: [],
-      ),
-      const _Comment(
-        id: '5',
-        avatar: 'https://i.pravatar.cc/150?img=15',
-        username: 'Alexis_V',
-        text: 'Mdrr ce commentaire section c\'est du délire 💀',
-        date: '06-20',
-        likes: 302,
-        replies: [],
-      ),
-      const _Comment(
-        id: '6',
-        avatar: 'https://i.pravatar.cc/150?img=25',
-        username: 'fatoumaD',
-        text: 'J\'adore le contenu continue comme ça 🙏🏾❤️',
-        date: '06-21',
-        likes: 88,
-        replies: [],
-      ),
-    ];
+// ─── No mock data — comments come from the server ────────────────────────────
+List<_Comment> _mockComments(int count) => [];
 
 // ─── Public API ───────────────────────────────────────────────────────────────
 void showCommentsSheet(BuildContext context, {int commentCount = 0}) {

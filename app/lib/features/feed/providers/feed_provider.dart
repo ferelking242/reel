@@ -1,5 +1,4 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:watchtower_real/features/feed/data/mock_feed.dart';
 import 'package:watchtower_real/remote/ntfy_logger.dart';
 import 'package:watchtower_real/remote/remote_config_provider.dart';
 
@@ -55,18 +54,6 @@ class FeedItemModel {
         videoUrl: videoUrl ?? this.videoUrl,
         isLive: isLive, isFromApi: isFromApi,
         isPhoto: isPhoto, photoUrls: photoUrls,
-      );
-
-  factory FeedItemModel.fromMock(FeedItem item) => FeedItemModel(
-        id: item.id, pageUrl: item.videoUrl, title: item.description,
-        thumbnailUrl: item.thumbnailUrl, author: item.author,
-        authorAvatar: item.authorAvatar, likes: item.likes,
-        comments: item.comments, shares: item.shares,
-        bookmarks: item.bookmarks, song: item.song,
-        hashtags: item.hashtags,
-        videoUrl: item.isPhoto ? null : item.videoUrl,
-        isLive: item.isLive, isFromApi: false,
-        isPhoto: item.isPhoto, photoUrls: item.photoUrls,
       );
 
   factory FeedItemModel.fromApi(Map<String, dynamic> json) {
@@ -174,8 +161,8 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
   /// Dynamically discover which source ID to use, then fetch its popular items.
   Future<FeedState> _load(FeedState current, RemoteConfig config) async {
     if (!config.isConfigured) {
-      NtfyLogger.info('Feed: aucune config serveur → mode démo');
-      return FeedState(items: kMockFeed.map(FeedItemModel.fromMock).toList());
+      NtfyLogger.info('Feed: aucune config serveur → liste vide');
+      return const FeedState(items: []);
     }
 
     try {
@@ -238,7 +225,7 @@ class FeedNotifier extends AsyncNotifier<FeedState> {
 
       if (current.items.isEmpty) {
         return FeedState(
-          items: kMockFeed.map(FeedItemModel.fromMock).toList(),
+          items: const [],
           error: errMsg.length > 120 ? '${errMsg.substring(0, 120)}…' : errMsg,
         );
       }
