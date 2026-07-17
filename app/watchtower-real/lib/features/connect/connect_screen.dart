@@ -448,7 +448,7 @@ class _ServerStatusWidget extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(serverStatusProvider);
-    final config = ref.watch(remoteConfigProvider).valueOrNull;
+    final config = ref.watch(remoteConfigProvider).asData?.value;
 
     return Container(
       padding: const EdgeInsets.all(space12),

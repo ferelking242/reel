@@ -101,6 +101,11 @@ class FeedScreen extends HookConsumerWidget {
                 itemCount:       items.length,
                 onPageChanged: (i) {
                   ref.read(currentFeedIndexProvider.notifier).update(i);
+                  // Pagination infinie : charge la page suivante quand on
+                  // approche de la fin (3 items avant la dernière vidéo).
+                  if (i >= items.length - 3) {
+                    ref.read(feedItemsProvider.notifier).loadMore();
+                  }
                 },
                 itemBuilder: (context, index) {
                   final player = pool.value[index];
@@ -119,6 +124,12 @@ class FeedScreen extends HookConsumerWidget {
               // ── Header flottant ────────────────────────────────────────────
               const FeedHeader(),
 
+              // ── Spinner "chargement de plus" (pagination infinie) ─────────
+              const Positioned(
+                bottom: 60, left: 0, right: 0,
+                child: _LoadingMoreIndicator(),
+              ),
+
               // ── Bottom Nav ─────────────────────────────────────────────────
               const Positioned(
                 left: 0, right: 0, bottom: 0,
@@ -127,6 +138,29 @@ class FeedScreen extends HookConsumerWidget {
             ],
           );
         },
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Indicateur de chargement (pagination infinie)
+// ─────────────────────────────────────────────────────────────────────────────
+class _LoadingMoreIndicator extends ConsumerWidget {
+  const _LoadingMoreIndicator();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final loading = ref.watch(loadingMoreProvider);
+    if (!loading) return const SizedBox.shrink();
+    return const Center(
+      child: SizedBox(
+        width: 24,
+        height: 24,
+        child: CircularProgressIndicator(
+          strokeWidth: 2,
+          color: Colors.white70,
+        ),
       ),
     );
   }
