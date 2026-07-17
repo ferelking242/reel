@@ -21,6 +21,12 @@ dependencies:
   # ── Navigation ───────────────────────────────────────────────────────────────
   go_router: ^17.2.0
 
+  # ── Watchtower SDK — client officiel (retry, auth, modèles typés) ────────────
+  watchtower_client:
+    git:
+      url: https://github.com/ferelking242/watchtower-sdk-dart.git
+      ref: main
+
   # ── Network ──────────────────────────────────────────────────────────────────
   http: ^1.6.0
 

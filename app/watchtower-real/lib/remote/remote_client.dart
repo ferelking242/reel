@@ -1,80 +1,101 @@
-import 'dart:convert';
-import 'package:flutter/foundation.dart';
-import 'package:http/http.dart' as http;
-import 'package:reel/remote/app_version.dart';
+import 'package:watchtower_client/watchtower_client.dart';
 import 'package:reel/utils/log/app_file_logger.dart';
+import 'package:reel/remote/app_version.dart';
 
-/// Minimal HTTP client for the Watchtower remote API server.
-/// Configure [baseUrl] and [apiKey] before use.
+/// Adaptateur mince sur [WatchtowerClient] (SDK officiel Watchtower).
+///
+/// Conserve exactement l'interface de l'ancien [RemoteApiClient] afin que
+/// [FeedNotifier] et le reste du code n'aient pas à changer.
+///
+/// Bénéfices obtenus via le SDK :
+/// - Retry exponentiel automatique (300 ms → 600 ms → 1200 ms, max 3 tentatives)
+/// - Injection automatique du header auth (`X-Api-Key`)
+/// - Timeout configurable par requête
+/// - Exceptions typées ([WatchtowerNetworkException], [WatchtowerApiException])
 class RemoteApiClient {
-  RemoteApiClient({required this.baseUrl, this.apiKey});
+  RemoteApiClient({required this.baseUrl, this.apiKey})
+      : _client = WatchtowerClient(
+          url: baseUrl,
+          apiKey: apiKey,
+          timeout: const Duration(seconds: 20),
+          maxRetries: 3,
+        );
 
   final String baseUrl;
   final String? apiKey;
+  final WatchtowerClient _client;
 
-  Map<String, String> get _headers => {
-        'Content-Type': 'application/json',
-        'X-App-Version': AppVersion.headerValue,
-        if (apiKey != null && apiKey!.isNotEmpty) 'Authorization': 'Bearer $apiKey',
-      };
+  static const _tag = 'RemoteClient';
 
-  Future<Map<String, dynamic>> ping() => _get('/api/ping');
+  // ── Health check ────────────────────────────────────────────────────────────
 
-  Future<List<dynamic>> sources() async =>
-      (await _get('/api/sources'))['sources'] as List<dynamic>? ?? [];
-
-  Future<Map<String, dynamic>> popular(String sourceId, {int page = 1}) =>
-      _get('/api/sources/$sourceId/popular?page=$page');
-
-  Future<Map<String, dynamic>> latest(String sourceId, {int page = 1}) =>
-      _get('/api/sources/$sourceId/latest?page=$page');
-
-  Future<Map<String, dynamic>> search(String sourceId, String query, {int page = 1}) =>
-      _get('/api/sources/$sourceId/search?q=${Uri.encodeComponent(query)}&page=$page');
-
-  Future<Map<String, dynamic>> detail(String sourceId, String itemUrl) =>
-      _get('/api/sources/$sourceId/detail?url=${Uri.encodeComponent(itemUrl)}');
-
-  Future<Map<String, dynamic>> videos(String sourceId, String episodeUrl) =>
-      _get('/api/sources/$sourceId/videos?url=${Uri.encodeComponent(episodeUrl)}');
-
-  Future<Map<String, dynamic>> _get(String path) async {
-    final uri = Uri.parse('$baseUrl$path');
-    final tag = 'RemoteClient';
-    logger.log(tag, 'GET $uri  [v${AppVersion.headerValue}]');
-    final t0 = DateTime.now();
-
-    final http.Response res;
-    try {
-      res = await http.get(uri, headers: _headers);
-    } catch (e, st) {
-      logger.error(tag, 'NETWORK ERROR: $e', st);
-      rethrow;
-    }
-
-    final ms = DateTime.now().difference(t0).inMilliseconds;
-    logger.log(tag, '${res.statusCode} $path  (${ms}ms — ${res.body.length}B)');
-
-    if (res.statusCode == 429) {
-      logger.log(tag, 'Rate limited (429)');
-      throw Exception('Rate limited (429) — attends un moment');
-    }
-    if (res.statusCode == 401) {
-      logger.log(tag, 'Unauthorized (401) — vérifie la clé API');
-      throw Exception('Unauthorized (401) — clé API incorrecte');
-    }
-    if (res.statusCode != 200) {
-      final body = res.body.substring(0, res.body.length.clamp(0, 500));
-      logger.log(tag, 'HTTP Error ${res.statusCode}: $body');
-      throw Exception('HTTP ${res.statusCode}: ${res.body}');
-    }
-
-    try {
-      final decoded = json.decode(res.body) as Map<String, dynamic>;
-      return decoded;
-    } catch (e, st) {
-      logger.error(tag, 'JSON parse error: $e | body: ${res.body.substring(0, res.body.length.clamp(0, 200))}', st);
-      throw Exception('Réponse JSON invalide: $e');
-    }
+  Future<Map<String, dynamic>> ping() async {
+    logger.log(_tag, 'GET /api/ping [v${AppVersion.headerValue}]');
+    final ok = await _client.ping();
+    return {'status': ok ? 'ok' : 'error'};
   }
+
+  // ── Sources ─────────────────────────────────────────────────────────────────
+
+  /// Retourne la liste brute des sources (List de Map).
+  ///
+  /// Délègue à [WatchtowerClient.sources.list()] (typé) et reconvertit en
+  /// [List<Map<String,dynamic>>] pour ne pas casser [FeedNotifier._resolveSource].
+  Future<List<dynamic>> sources() async {
+    logger.log(_tag, 'GET /api/sources');
+    final list = await _client.sources.list();
+    return list.map((s) => s.toJson()).toList();
+  }
+
+  // ── Contenu — via getRaw (conserve TOUS les champs de la réponse) ────────────
+  //
+  // On passe par client.getRaw() plutôt que par les endpoints typés afin que
+  // FeedNotifier._extractItems puisse chercher n'importe quelle clé retournée
+  // par le serveur (list, mangas, items, data, results, videos, posts, content…).
+
+  Future<Map<String, dynamic>> popular(String sourceId, {int page = 1}) async {
+    logger.log(_tag, 'GET /api/sources/$sourceId/popular?page=$page');
+    return _client.getRaw(
+      '/api/sources/$sourceId/popular',
+      queryParams: {'page': page.toString()},
+    );
+  }
+
+  Future<Map<String, dynamic>> latest(String sourceId, {int page = 1}) async {
+    logger.log(_tag, 'GET /api/sources/$sourceId/latest?page=$page');
+    return _client.getRaw(
+      '/api/sources/$sourceId/latest',
+      queryParams: {'page': page.toString()},
+    );
+  }
+
+  Future<Map<String, dynamic>> search(
+      String sourceId, String query, {int page = 1}) async {
+    logger.log(_tag, 'GET /api/sources/$sourceId/search?q=$query&page=$page');
+    return _client.getRaw(
+      '/api/sources/$sourceId/search',
+      queryParams: {'q': query, 'page': page.toString()},
+    );
+  }
+
+  Future<Map<String, dynamic>> detail(
+      String sourceId, String itemUrl) async {
+    logger.log(_tag, 'GET /api/sources/$sourceId/detail');
+    return _client.getRaw(
+      '/api/sources/$sourceId/detail',
+      queryParams: {'url': itemUrl},
+    );
+  }
+
+  Future<Map<String, dynamic>> videos(
+      String sourceId, String episodeUrl) async {
+    logger.log(_tag, 'GET /api/sources/$sourceId/videos');
+    return _client.getRaw(
+      '/api/sources/$sourceId/videos',
+      queryParams: {'url': episodeUrl},
+    );
+  }
+
+  /// Libère les ressources du client HTTP sous-jacent.
+  void dispose() => _client.close();
 }
