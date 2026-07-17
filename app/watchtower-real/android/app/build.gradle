@@ -45,16 +45,14 @@ android {
     buildTypes {
         release {
             signingConfig signingConfigs.reel
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            shrinkResources false
         }
         profile {
             matchingFallbacks = ['release']
             signingConfig signingConfigs.reel
-            minifyEnabled true
-            shrinkResources true
-            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+            minifyEnabled false
+            shrinkResources false
         }
         debug {
             signingConfig signingConfigs.reel
