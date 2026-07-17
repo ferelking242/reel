@@ -1,10 +1,12 @@
 name: watchtower_real
-description: Watchtower Real Feed — TikTok-style vertical content feed powered by the Watchtower remote API.
+description: >
+  Watchtower Real — TikTok-style vertical feed UI for Watchtower.
+  UI-only; same tech stack as the main watchtower app for seamless merge.
 publish_to: 'none'
 version: 1.0.0+1
 
 environment:
-  sdk: ^3.8.0
+  sdk: ^3.10.0
 
 dependencies:
   flutter:
@@ -12,47 +14,64 @@ dependencies:
   flutter_localizations:
     sdk: flutter
 
-  # ── State management ────────────────────────────────────────────────────────
-  flutter_riverpod: ^2.6.1
-  riverpod_annotation: ^2.3.5
-  riverpod: ^2.6.1
-  hooks_riverpod: ^2.0.4
+  # ── State management (same versions as watchtower) ───────────────────────────
+  flutter_riverpod: ^3.1.0
+  riverpod_annotation: ^4.0.0
+  riverpod: ^3.1.0
+  hooks_riverpod: ^3.0.0
   flutter_hooks: ^0.21.0
 
-  # ── Navigation ──────────────────────────────────────────────────────────────
+  # ── Navigation (same as watchtower) ─────────────────────────────────────────
   go_router: ^17.2.0
 
-  # ── Network ─────────────────────────────────────────────────────────────────
+  # ── Network ──────────────────────────────────────────────────────────────────
   http: ^1.6.0
 
-  # ── Storage ─────────────────────────────────────────────────────────────────
-  shared_preferences: ^2.3.5
+  # ── Storage — same as watchtower (Isar) ──────────────────────────────────────
+  isar_community: ^3.3.2
+  isar_community_flutter_libs: ^3.3.2
   hive: ^2.2.3
   hive_flutter: ^1.1.0
+  shared_preferences: ^2.3.5
 
-  # ── UI ──────────────────────────────────────────────────────────────────────
+  # ── Video — same fork as watchtower (media_kit) ──────────────────────────────
+  media_kit:
+    git:
+      url: https://github.com/kodjodevf/media-kit.git
+      path: media_kit
+      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+  media_kit_video:
+    git:
+      url: https://github.com/kodjodevf/media-kit.git
+      path: media_kit_video
+      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+  media_kit_libs_video:
+    git:
+      url: https://github.com/kodjodevf/media-kit.git
+      path: libs/universal/media_kit_libs_video
+      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+
+  # ── UI (same as watchtower) ──────────────────────────────────────────────────
   flex_color_scheme: ^8.3.1
-  cached_network_image: ^3.4.1
+  cached_network_image: ^3.3.1
+  extended_image: ^10.0.0
   skeletonizer: ^2.1.0+1
+  shimmer: ^3.0.0
+  marquee: ^2.2.3
   cupertino_icons: ^1.0.9
 
-  # ── Video (inline feed player; MPV full-screen via Watchtower intent) ────────
-  video_player: ^2.9.2
-
-  # ── Marquee (son name ticker) ────────────────────────────────────────────────
-  marquee: ^2.2.3
-
-  # ── Shimmer loading ──────────────────────────────────────────────────────────
-  shimmer: ^3.0.0
-
-  # ── File system & app info ───────────────────────────────────────────────────
+  # ── Utils ────────────────────────────────────────────────────────────────────
   path_provider: ^2.1.5
-  package_info_plus: ^8.3.0
+  package_info_plus: ^9.0.1
+  intl: ^0.20.2
 
 dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  build_runner: ^2.4.15
+  isar_community_generator: ^3.3.2
+  riverpod_generator: ^3.0.0
 
 flutter:
   uses-material-design: true

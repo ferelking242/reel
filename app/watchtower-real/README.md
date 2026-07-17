@@ -1,30 +1,61 @@
 # Watchtower Real
 
-TikTok-style vertical content feed powered by the **Watchtower remote API**.
+TikTok-style vertical feed UI for **[Watchtower](https://github.com/ferelking242/watchtower)**.
 
-## Architecture
+> **This is UI-only.** The server, extensions, database, and all backend logic live in the main [watchtower](https://github.com/ferelking242/watchtower) repo.  
+> `watchtower-real` is developed separately for fast iteration and will be merged into `watchtower` once validated.
 
-- Connects to a running Watchtower instance (mobile APK or Node.js server) via the remote API (port 4567)
-- No embedded JS engine, no Rust, no Isar — pure Flutter + Riverpod + HTTP
-- Fast iteration on UI without touching the main Watchtower app
-- Once screens are validated, the build workflow assembles the final APK automatically from this repo
+---
 
-## Remote API
+## What this is
 
-The app consumes the Watchtower remote server API:
+A lightweight Flutter app that displays content from a running Watchtower instance in a TikTok-style vertical feed. No embedded JS engine, no Rust, no Go — just UI + HTTP.
 
-| Endpoint | Description |
+## What this is NOT
+
+- ❌ The server (→ `watchtower/server/`)
+- ❌ The extension engine (→ `watchtower/lib/eval/`)
+- ❌ The database (→ `watchtower` uses Isar)
+- ❌ The torrent client (→ `watchtower/go/`)
+
+## How it connects
+
+```
+watchtower-real UI
+       │  HTTP (REST API)
+       ▼
+watchtower embedded server  (port 4567 on device)
+       OR
+watchtower headless server  (port 8080 on cloud)
+```
+
+## Same tech stack as watchtower
+
+`watchtower-real` uses the exact same packages as `watchtower` so the merge is seamless:
+
+| Package | Version |
 |---|---|
-| `GET /api/ping` | Health check |
-| `GET /api/sources` | List all sources |
-| `GET /api/sources/:id/popular` | Popular content |
-| `GET /api/sources/:id/latest` | Latest content |
-| `GET /api/sources/:id/search?query=` | Search |
-| `GET /api/sources/:id/detail?url=` | Item detail |
-| `GET /api/sources/:id/videos?url=` | Video URLs |
+| `flutter_riverpod` | `^3.1.0` |
+| `isar_community` | `^3.3.2` |
+| `media_kit` | git (kodjodevf fork) |
+| `flex_color_scheme` | `^8.3.1` |
+| `go_router` | `^17.2.0` |
 
-Auth: `Authorization: Bearer <api_key>` or `?key=<api_key>`
+## Merge into watchtower
+
+At build time, a GitHub Actions workflow copies the `lib/modules/feed/` module from `watchtower-real` into `watchtower/lib/modules/feed/`.  
+When running inside watchtower:
+- No separate DB — uses watchtower's Isar instance directly
+- No separate cache — uses watchtower's existing HTTP cache
+- No separate prefs — uses watchtower's Hive boxes
 
 ## Build
 
-GitHub Actions builds an ARM64 profile APK on every push to `main`.
+```bash
+git clone https://github.com/ferelking242/watchtower-real.git
+cd watchtower-real/app/watchtower-real
+flutter pub get
+flutter run
+```
+
+CI builds the APK + IPA automatically on every push to `main`.
