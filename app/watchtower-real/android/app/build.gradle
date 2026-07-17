@@ -29,6 +29,7 @@ android {
         targetSdkVersion 36
         versionCode flutter.versionCode
         versionName flutter.versionName
+        multiDexEnabled true
     }
 
     signingConfigs {
@@ -47,12 +48,14 @@ android {
             signingConfig signingConfigs.reel
             minifyEnabled false
             shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         profile {
             matchingFallbacks = ['release']
             signingConfig signingConfigs.reel
             minifyEnabled false
             shrinkResources false
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
         }
         debug {
             signingConfig signingConfigs.reel

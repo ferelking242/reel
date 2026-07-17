@@ -1,3 +1,5 @@
 -keep class io.flutter.** { *; }
--keep class com.watchtower.real.** { *; }
+-keep class io.flutter.embedding.** { *; }
+-keep class com.watchtower.reel.** { *; }
+-keep class com.watchtower.reel.MainActivity { *; }
 -dontwarn io.flutter.**
