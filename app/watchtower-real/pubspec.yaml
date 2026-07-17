@@ -1,5 +1,5 @@
-name: watchtower_real
-description: UI TikTok-style pour Watchtower. Se fusionne dans watchtower/lib/ui/tiktok/.
+name: reel
+description: Reel — UI TikTok-style pour Watchtower. Fusionne dans watchtower/lib/ui/tiktok/.
 publish_to: 'none'
 version: 1.0.0+1
 

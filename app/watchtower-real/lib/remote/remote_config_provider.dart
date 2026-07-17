@@ -1,6 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
-import 'package:watchtower_real/remote/remote_client.dart';
+import 'package:reel/remote/remote_client.dart';
 
 const _kBaseUrl         = 'wt_real_server_url';
 const _kApiKey          = 'wt_real_api_key';

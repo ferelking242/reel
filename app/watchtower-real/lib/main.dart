@@ -4,9 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:hive_flutter/hive_flutter.dart';
 import 'package:media_kit/media_kit.dart';
-import 'package:watchtower_real/app.dart';
-import 'package:watchtower_real/utils/log/app_file_logger.dart';
-import 'package:watchtower_real/remote/app_version.dart';
+import 'package:reel/app.dart';
+import 'package:reel/utils/log/app_file_logger.dart';
+import 'package:reel/remote/app_version.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -39,7 +39,7 @@ Future<void> main() async {
 
   logger.log('MAIN', 'Launching ProviderScope…');
   runZonedGuarded(
-    () => runApp(const ProviderScope(child: WatchtowerRealApp())),
+    () => runApp(const ProviderScope(child: ReelApp())),
     (error, st) => logger.error('ZONE', error, st),
   );
 }

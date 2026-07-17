@@ -3,13 +3,13 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'core/theme/app_theme.dart';
 import 'router/router.dart';
 
-class WatchtowerRealApp extends StatelessWidget {
-  const WatchtowerRealApp({super.key});
+class ReelApp extends StatelessWidget {
+  const ReelApp({super.key});
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp.router(
-      title: 'Watchtower',
+      title: 'Reel',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.dark,
       routerConfig: router,

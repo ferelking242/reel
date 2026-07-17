@@ -1,47 +1,43 @@
-name: Build APK
+name: Build APK — Reel
 
 on:
   push:
-    branches: [main]
-  pull_request:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
-permissions:
-  contents: write
-
 jobs:
-  build:
-    name: Build ARM64 APK
+  build-android:
+    name: Android arm64 (Reel)
     runs-on: ubuntu-latest
 
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+    defaults:
+      run:
+        working-directory: app/watchtower-real
 
-      - name: Set up Java 17
-        uses: actions/setup-java@v4
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: 17
 
-      - name: Set up Flutter 3.38.x
-        uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.38.x'
           channel: stable
           cache: true
 
-      - name: Cache pub packages
+      - name: Cache pub
         uses: actions/cache@v4
         with:
           path: ~/.pub-cache
-          key: ${{ runner.os }}-pub-${{ hashFiles('**/pubspec.lock') }}
-          restore-keys: ${{ runner.os }}-pub-
+          key: pub-${{ runner.os }}-${{ hashFiles('app/watchtower-real/pubspec.lock') }}
+          restore-keys: pub-${{ runner.os }}-
 
       - name: Cache Gradle
         uses: actions/cache@v4
@@ -49,69 +45,58 @@ jobs:
           path: |
             ~/.gradle/caches
             ~/.gradle/wrapper
-          key: gradle-${{ runner.os }}-${{ hashFiles('**/*.gradle*', '**/gradle-wrapper.properties', '**/pubspec.lock') }}
+          key: gradle-${{ runner.os }}-${{ hashFiles('app/watchtower-real/android/**/*.gradle*', 'app/watchtower-real/pubspec.lock') }}
+          restore-keys: gradle-${{ runner.os }}-
 
-      - name: Generate keystore
+      # ── Keystore permanent (même clé à chaque build → updates APK fonctionnent) ──
+      - name: Restore keystore
+        working-directory: app/watchtower-real/android/app
+        env:
+          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
         run: |
-          cd android/app
-          keytool -genkeypair -v \
-            -storetype PKCS12 \
-            -keystore watchtower-debug.keystore \
-            -alias watchtower \
-            -keyalg RSA -keysize 2048 \
-            -validity 10000 \
-            -storepass watchtower \
-            -keypass watchtower \
-            -dname "CN=Watchtower Real, OU=Dev, O=Watchtower, L=Montreal, S=QC, C=CA"
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "$KEYSTORE_BASE64" | base64 -d > reel.keystore
+            echo "✅ Keystore restauré depuis KEYSTORE_BASE64"
+          else
+            # Fallback : génère un keystore de dev (ne pas utiliser en prod)
+            echo "⚠️  Secret KEYSTORE_BASE64 absent — génère un keystore temporaire"
+            echo "   → Les mises à jour APK ne fonctionneront PAS avec ce keystore."
+            echo "   → Voir deployment/README.md pour configurer le secret."
+            apt-get install -y --no-install-recommends default-jdk-headless > /dev/null 2>&1 || true
+            keytool -genkey -v \
+              -keystore reel.keystore -alias reel \
+              -keyalg RSA -keysize 2048 -validity 36500 \
+              -storetype PKCS12 \
+              -storepass reelwatchtower -keypass reelwatchtower \
+              -dname "CN=Reel Dev,O=Watchtower,C=CA"
+          fi
 
-      - name: Compute version
-        id: ver
-        run: |
-          VNAME="1.0.${GITHUB_RUN_NUMBER}"
-          VCODE=${GITHUB_RUN_NUMBER}
-          sed -i "s/^version:.*/version: ${VNAME}+${VCODE}/" pubspec.yaml
-          echo "name=${VNAME}" >> "$GITHUB_OUTPUT"
-          echo "code=${VCODE}" >> "$GITHUB_OUTPUT"
-
-      - name: flutter pub get
+      - name: Flutter pub get
         run: flutter pub get
 
-      - name: Build ARM64 profile APK
+      - name: Build APK — arm64-v8a
+        env:
+          GRADLE_OPTS:    "-Dorg.gradle.daemon=false -Dhttp.keepAlive=false"
+          KEYSTORE_PATH:  "reel.keystore"
+          KEY_ALIAS:      "reel"
+          KEY_PASSWORD:   ${{ secrets.KEY_PASSWORD || 'reelwatchtower' }}
+          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD || 'reelwatchtower' }}
         run: |
           flutter build apk \
-            --profile \
+            --release \
             --target-platform android-arm64 \
             --split-per-abi
 
-      - name: Rename APK
+      - name: Collect artifact
         run: |
-          SRC=build/app/outputs/flutter-apk/app-arm64-v8a-profile.apk
-          DST=build/app/outputs/flutter-apk/WatchtowerReal-${{ steps.ver.outputs.name }}-b${{ steps.ver.outputs.code }}-arm64.apk
-          cp "$SRC" "$DST"
-          echo "APK: $(du -sh $DST | cut -f1)"
+          mkdir -p artifacts
+          APK="build/app/outputs/flutter-apk/app-arm64-v8a-release.apk"
+          [ -f "$APK" ] || { echo "ERROR: APK not found"; ls build/app/outputs/flutter-apk/ || true; exit 1; }
+          cp "$APK" "artifacts/reel-arm64-v8a.apk"
+          echo "APK: $(du -sh artifacts/reel-arm64-v8a.apk)"
 
-      - name: Upload APK artifact
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
         with:
-          name: WatchtowerReal-${{ steps.ver.outputs.name }}-b${{ steps.ver.outputs.code }}-arm64
-          path: build/app/outputs/flutter-apk/WatchtowerReal-${{ steps.ver.outputs.name }}-b${{ steps.ver.outputs.code }}-arm64.apk
-          compression-level: 0
+          name: reel-apk-arm64
+          path: app/watchtower-real/artifacts/reel-arm64-v8a.apk
           retention-days: 30
-
-      - name: Notify ntfy (success)
-        if: success()
-        run: |
-          curl -s -X POST https://ntfy.sh/watchtower \
-            -H "Title: WatchtowerReal Build OK" \
-            -H "Priority: default" \
-            -H "Tags: white_check_mark" \
-            -d "APK arm64 — v${{ steps.ver.outputs.name }} — ${{ github.event.head_commit.message }}" || true
-
-      - name: Notify ntfy (failure)
-        if: failure()
-        run: |
-          curl -s -X POST https://ntfy.sh/watchtower \
-            -H "Title: WatchtowerReal Build FAIL" \
-            -H "Priority: urgent" \
-            -H "Tags: rotating_light" \
-            -d "Build FAILED — sha ${{ github.sha }} — ${{ github.event.head_commit.message }}" || true

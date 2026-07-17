@@ -1,8 +1,8 @@
 import 'dart:convert';
 import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
-import 'package:watchtower_real/remote/app_version.dart';
-import 'package:watchtower_real/utils/log/app_file_logger.dart';
+import 'package:reel/remote/app_version.dart';
+import 'package:reel/utils/log/app_file_logger.dart';
 
 /// Minimal HTTP client for the Watchtower remote API server.
 /// Configure [baseUrl] and [apiKey] before use.

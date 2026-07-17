@@ -1,5 +1,5 @@
 import 'package:package_info_plus/package_info_plus.dart';
-import 'package:watchtower_real/utils/log/app_file_logger.dart';
+import 'package:reel/utils/log/app_file_logger.dart';
 
 /// Singleton holding the app's version strings.
 /// Call [init] once in `main()` before using [version] / [buildNumber].
