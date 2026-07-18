@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:watchtower_real/core/theme/tokens.dart';
+import 'package:reel/core/theme/tokens.dart';
 
 class FollowButton extends StatefulWidget {
   const FollowButton({super.key, this.mini = false});
