@@ -16,12 +16,30 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+        with:
+          lfs: true
 
       - uses: subosito/flutter-action@v2
         with:
           flutter-version: '3.44.x'
           channel: stable
           cache: true
+
+      - name: Install Rust (rust_lib_watchtower FFI via cargokit)
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios,x86_64-apple-ios
+
+      - name: Cache Rust
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            rust/target
+            rust_builder/target
+          key: cargo-ios-${{ runner.os }}-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: cargo-ios-${{ runner.os }}-
 
       - name: Cache pub
         uses: actions/cache@v4
@@ -30,8 +48,49 @@ jobs:
           key: pub-${{ runner.os }}-${{ hashFiles('pubspec.lock') }}
           restore-keys: pub-${{ runner.os }}-
 
+      - name: Cache CocoaPods spec repo
+        uses: actions/cache@v4
+        with:
+          path: ~/.cocoapods
+          key: cocoapods-repo-${{ runner.os }}-v1
+          restore-keys: cocoapods-repo-${{ runner.os }}-
+
+      - name: Cache ios/Pods
+        id: pods-cache
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: pods-${{ runner.os }}-${{ hashFiles('ios/Podfile') }}
+          restore-keys: pods-${{ runner.os }}-
+
       - name: Flutter pub get
         run: flutter pub get
+
+      - name: Fix flutter_new_pipe_extractor missing assets dir
+        run: |
+          find ~/.pub-cache/git -maxdepth 1 -name "flutter_new_pipe_extractor*" -type d | while read dir; do
+            mkdir -p "$dir/assets"
+            echo "Created: $dir/assets"
+          done
+
+      - name: Install CocoaPods
+        run: |
+          cd ios
+          if [ "${{ steps.pods-cache.outputs.cache-hit }}" = "true" ]; then
+            pod install
+          else
+            pod install --repo-update
+          fi
+
+      - name: Patch Xcode project for CI (manual signing, no team)
+        run: |
+          PBXPROJ="ios/Runner.xcodeproj/project.pbxproj"
+          sed -i '' 's/CODE_SIGN_STYLE = Automatic;/CODE_SIGN_STYLE = Manual;/g' "$PBXPROJ"
+          sed -i '' 's/"CODE_SIGN_IDENTITY\[sdk=iphoneos\*\]" = "[^"]*"/"CODE_SIGN_IDENTITY[sdk=iphoneos*]" = ""/g' "$PBXPROJ"
+          sed -i '' 's/CODE_SIGN_IDENTITY = "[^"]*";/CODE_SIGN_IDENTITY = "";/g' "$PBXPROJ"
+          sed -i '' 's/DEVELOPMENT_TEAM = [A-Za-z0-9][A-Za-z0-9]*;/DEVELOPMENT_TEAM = "";/g' "$PBXPROJ"
+          sed -i '' 's/PROVISIONING_PROFILE_SPECIFIER = [^;]*;/PROVISIONING_PROFILE_SPECIFIER = "";/g' "$PBXPROJ"
+          sed -i '' 's/PROVISIONING_PROFILE = [^;]*;/PROVISIONING_PROFILE = "";/g' "$PBXPROJ"
 
       - name: Build iOS (no codesign)
         run: flutter build ios --release --no-codesign
