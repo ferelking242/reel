@@ -87,9 +87,11 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
         data: (feedState) {
           final items = feedState.items;
           if (items.isEmpty) {
-            return const Center(
-              child: Text('Aucun contenu',
-                  style: TextStyle(color: Colors.white)),
+            // Écran vide ou erreur réseau → affiche un état propre avec boutons
+            return _FeedEmptyState(
+              error: feedState.error,
+              onRetry: () => ref.invalidate(feedProvider),
+              onConfigure: () => context.go('/connect'),
             );
           }
           return NotificationListener<ScrollNotification>(
@@ -183,6 +185,96 @@ class _FeedScreenState extends ConsumerState<FeedScreen> {
       bottomNavigationBar: _BottomNav(
         currentIndex: _navIndex,
         onTap: _onNavTap,
+      ),
+    );
+  }
+}
+
+// ─── Empty / error state ─────────────────────────────────────────────────────
+
+class _FeedEmptyState extends StatelessWidget {
+  const _FeedEmptyState({
+    required this.error,
+    required this.onRetry,
+    required this.onConfigure,
+  });
+
+  final String? error;
+  final VoidCallback onRetry;
+  final VoidCallback onConfigure;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasError = error != null && error!.isNotEmpty;
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              hasError ? Icons.wifi_off_rounded : Icons.inbox_outlined,
+              color: hasError ? Colors.redAccent : Colors.white38,
+              size: 56,
+            ),
+            const SizedBox(height: 20),
+            Text(
+              hasError
+                  ? 'Impossible de charger le feed'
+                  : 'Aucun contenu disponible',
+              style: const TextStyle(
+                color: Colors.white,
+                fontSize: 16,
+                fontWeight: FontWeight.w600,
+              ),
+              textAlign: TextAlign.center,
+            ),
+            if (hasError) ...[
+              const SizedBox(height: 10),
+              Text(
+                error!.length > 160 ? '${error!.substring(0, 160)}…' : error!,
+                style: const TextStyle(color: Colors.white54, fontSize: 11),
+                textAlign: TextAlign.center,
+              ),
+            ],
+            const SizedBox(height: 28),
+            SizedBox(
+              width: double.infinity,
+              child: ElevatedButton.icon(
+                onPressed: onRetry,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTokens.colorBrand,
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.refresh_rounded, size: 18),
+                label: const Text('Réessayer'),
+              ),
+            ),
+            const SizedBox(height: 10),
+            SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: onConfigure,
+                style: OutlinedButton.styleFrom(
+                  side: const BorderSide(color: Colors.white38),
+                  padding: const EdgeInsets.symmetric(vertical: 13),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                icon: const Icon(Icons.settings_ethernet_rounded,
+                    color: Colors.white70, size: 18),
+                label: const Text(
+                  'Modifier la connexion',
+                  style: TextStyle(color: Colors.white70),
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

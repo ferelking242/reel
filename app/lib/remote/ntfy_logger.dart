@@ -1,33 +1,35 @@
 import 'dart:async';
 import 'package:http/http.dart' as http;
+import 'package:watchtower_real/remote/ntfy_config.dart';
 
-/// Sends push log messages to ntfy.sh so you can watch the app live.
-/// Topic: https://ntfy.sh/watchtower-app  (subscribe on your phone)
+/// Envoie des messages de log push vers ntfy.sh pour surveiller l'app en live.
+/// Topic configuré dans [NtfyConfig.topic] → https://ntfy.sh/watchtower-real
 class NtfyLogger {
-  static const _topic = 'https://ntfy.sh/watchtower-app';
+  static String get _topic => NtfyConfig.topic;
+  static String get _appName => NtfyConfig.appName;
 
-  /// Send a debug/info message (low priority).
+  /// Message debug/info (priorité basse).
   static void info(String msg, {String? title}) =>
-      _send(msg, title: title ?? '📱 Watchtower', priority: 'low', tags: 'information_source');
+      _send(msg, title: title ?? '📱 $_appName', priority: 'low', tags: 'information_source');
 
-  /// Send a warning (remote fallback, etc.).
+  /// Avertissement (fallback réseau, etc.).
   static void warn(String msg, {String? title}) =>
-      _send(msg, title: title ?? '⚠️ Watchtower', priority: 'default', tags: 'warning');
+      _send(msg, title: title ?? '⚠️ $_appName', priority: 'default', tags: 'warning');
 
-  /// Send an error (high priority).
+  /// Erreur critique (priorité haute).
   static void error(String msg, {String? title}) =>
-      _send(msg, title: title ?? '🔴 Watchtower Error', priority: 'high', tags: 'rotating_light');
+      _send(msg, title: title ?? '🔴 $_appName Error', priority: 'high', tags: 'rotating_light');
 
-  /// Send a success message.
+  /// Succès.
   static void ok(String msg, {String? title}) =>
-      _send(msg, title: title ?? '✅ Watchtower', priority: 'low', tags: 'white_check_mark');
+      _send(msg, title: title ?? '✅ $_appName', priority: 'low', tags: 'white_check_mark');
 
   static void _send(String body, {
     required String title,
     required String priority,
     required String tags,
   }) {
-    // Fire and forget — never block the UI
+    // Fire and forget — ne bloque jamais l'UI
     unawaited(
       http.post(
         Uri.parse(_topic),
