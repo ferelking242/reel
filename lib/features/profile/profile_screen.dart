@@ -16,6 +16,7 @@ class ProfileScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: colorBgBase,
+        foregroundColor: colorTextPrimary,
       // ── AppBar ──────────────────────────────────────────────────────────────
       appBar: AppBar(
         backgroundColor: colorBgBase,

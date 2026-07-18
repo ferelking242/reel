@@ -31,8 +31,12 @@ class RemoteApiClient {
 
   Future<Map<String, dynamic>> ping() async {
     logger.log(_tag, 'GET /api/ping [v${AppVersion.headerValue}]');
-    final ok = await _client.ping();
-    return {'status': ok ? 'ok' : 'error'};
+    try {
+      // getRaw conserve tous les champs (status, version, …)
+      return await _client.getRaw('/api/ping');
+    } catch (_) {
+      return {'status': 'error'};
+    }
   }
 
   // ── Sources ─────────────────────────────────────────────────────────────────

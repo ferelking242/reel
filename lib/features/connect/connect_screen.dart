@@ -65,7 +65,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       final rawSources = await client.sources().timeout(const Duration(seconds: 10));
       final sources = rawSources
           .whereType<Map<String, dynamic>>()
-          .where((s) => s['available'] == true)
           .toList();
 
       setState(() {
@@ -118,6 +117,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       backgroundColor: colorBgBase,
       appBar: AppBar(
         backgroundColor: colorBgCard,
+        foregroundColor: colorTextPrimary,
         title: const Text(
           'Connecter un serveur',
           style: TextStyle(
@@ -245,6 +245,27 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                               ),
                             ),
                             const SizedBox(width: 12),
+                            // Icon extension
+                            Builder(builder: (context) {
+                              final iconUrl = s['iconUrl'] as String?;
+                              if (iconUrl != null && iconUrl.isNotEmpty) {
+                                return Padding(
+                                  padding: const EdgeInsets.only(right: 10),
+                                  child: ClipRRect(
+                                    borderRadius: BorderRadius.circular(4),
+                                    child: Image.network(
+                                      iconUrl,
+                                      width: 28,
+                                      height: 28,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (_, __, ___) =>
+                                          const SizedBox(width: 28),
+                                    ),
+                                  ),
+                                );
+                              }
+                              return const SizedBox.shrink();
+                            }),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
