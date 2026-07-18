@@ -7,7 +7,7 @@ import '../features/friends/friends_screen.dart';
 import '../features/inbox/inbox_screen.dart';
 
 final router = GoRouter(
-  initialLocation: '/',
+  initialLocation: '/connect',
   debugLogDiagnostics: false,
   routes: [
     GoRoute(
