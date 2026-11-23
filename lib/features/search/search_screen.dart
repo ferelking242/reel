@@ -1,78 +1,116 @@
-import 'package:flutter/material.dart';
-import 'package:reel/core/theme/tokens.dart';
-import 'package:reel/features/search/search_results_screen.dart';
+import 'dart:async';
 
-class SearchScreen extends StatefulWidget {
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
+
+import '../../core/haptics.dart';
+import '../../core/icons/reel_icons.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/utils/formatters.dart';
+import '../../core/widgets/pressable.dart';
+import '../../core/widgets/reel_avatar.dart';
+import '../../core/widgets/reel_sheet.dart';
+import 'providers/search_provider.dart';
+import 'search_results_screen.dart';
+
+class SearchScreen extends ConsumerStatefulWidget {
   const SearchScreen({super.key});
 
   @override
-  State<SearchScreen> createState() => _SearchScreenState();
+  ConsumerState<SearchScreen> createState() => _SearchScreenState();
 }
 
-class _SearchScreenState extends State<SearchScreen> {
-  final _ctrl = TextEditingController();
-  bool _searching = false;
-  String _query = '';
+class _SearchScreenState extends ConsumerState<SearchScreen> {
+  final _controller = TextEditingController();
+  final _focusNode = FocusNode();
+  Timer? _debounce;
+  String _submitted = '';
 
-  static const _history = [
-    'best song',
-    'france vs spain',
-    'Best animated serie',
-  ];
-
-  static const _suggestions = [
-    _Suggestion('BTS Munich Concert 2026', true, true),
-    _Suggestion('Match France vs Espagne', true, true),
-    _Suggestion('the best animation series', false, false),
-    _Suggestion('best songs', false, false),
-    _Suggestion('Trend Melon Glace', false, true),
-    _Suggestion('Lamine Yamal demi-finale', false, true),
-    _Suggestion('Samsung Galaxy Z Fold 8', false, true),
-    _Suggestion('DRAGON AGE ABSOLUTION', false, false),
-    _Suggestion('Dance sensation', false, false),
-    _Suggestion('animes recommendations', false, false),
-  ];
+  @override
+  void initState() {
+    super.initState();
+    final initial = ref.read(searchQueryProvider);
+    _controller.text = initial;
+    _submitted = initial;
+    _focusNode.requestFocus();
+  }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _debounce?.cancel();
+    _controller.dispose();
+    _focusNode.dispose();
     super.dispose();
   }
 
-  void _onSearch(String v) {
-    if (v.isNotEmpty) setState(() { _query = v; _searching = true; });
+  void _onChanged(String value) {
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 380), () {
+      ref.read(searchQueryProvider.notifier).update(value);
+      if (mounted) setState(() => _submitted = value.trim());
+    });
+    setState(() {});
+  }
+
+  void _submit(String value) {
+    final query = value.trim();
+    if (query.isEmpty) return;
+    _debounce?.cancel();
+    ref.read(searchHistoryProvider.notifier).add(query);
+    ref.read(searchQueryProvider.notifier).update(query);
+    setState(() => _submitted = query);
+    _focusNode.unfocus();
+    Haptics.light();
+  }
+
+  void _searchFor(String query) {
+    _controller.text = query;
+    _controller.selection = TextSelection.collapsed(offset: query.length);
+    _submit(query);
+  }
+
+  void _clear() {
+    _controller.clear();
+    ref.read(searchQueryProvider.notifier).clear();
+    setState(() => _submitted = '');
+    _focusNode.requestFocus();
   }
 
   @override
   Widget build(BuildContext context) {
+    final hasQuery = _submitted.isNotEmpty;
+
     return Scaffold(
-      backgroundColor: Colors.white,
+      backgroundColor: colorBgSurface,
       body: SafeArea(
         child: Column(
           children: [
-            // ── Search bar ──────────────────────────────────────────
             _SearchBar(
-              ctrl: _ctrl,
-              query: _query,
-              onChanged: (v) => setState(() {
-                _query = v;
-                _searching = v.isNotEmpty;
-              }),
-              onSubmit: _onSearch,
-              onClear: () => setState(() { _query = ''; _searching = false; }),
-              onVoice: () => _openVoiceSearch(context),
-              onCancel: () => Navigator.of(context).pop(),
+              controller: _controller,
+              focusNode: _focusNode,
+              showClear: _controller.text.isNotEmpty,
+              onChanged: _onChanged,
+              onSubmit: () => _submit(_controller.text),
+              onClear: _clear,
+              onBack: () {
+                if (context.canPop()) {
+                  context.pop();
+                } else {
+                  context.go('/');
+                }
+              },
+              onVoice: () => _showVoiceSheet(context),
             ),
             Expanded(
-              child: _searching
-                  ? SearchResultsScreen(query: _query)
+              child: hasQuery
+                  ? SearchResultsScreen(
+                      key: ValueKey(_submitted),
+                      query: _submitted,
+                    )
                   : _SuggestionsView(
-                      history: _history,
-                      suggestions: _suggestions,
-                      onTap: (s) {
-                        _ctrl.text = s;
-                        _onSearch(s);
-                      },
+                      history: ref.watch(searchHistoryProvider),
+                      onSearch: _searchFor,
                     ),
             ),
           ],
@@ -81,111 +119,141 @@ class _SearchScreenState extends State<SearchScreen> {
     );
   }
 
-  void _openVoiceSearch(BuildContext context) {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (_) => const _VoiceSearchModal(),
+  void _showVoiceSheet(BuildContext context) {
+    showReelSheet<void>(
+      context,
+      builder: (_) => const _VoiceSheet(),
     );
   }
 }
 
-// ─── Search bar ───────────────────────────────────────────────────────────────
+// ─────────────────────────────────────────────────────────────────────────────
+// Search bar
+// ─────────────────────────────────────────────────────────────────────────────
+
 class _SearchBar extends StatelessWidget {
   const _SearchBar({
-    required this.ctrl,
-    required this.query,
+    required this.controller,
+    required this.focusNode,
+    required this.showClear,
     required this.onChanged,
     required this.onSubmit,
     required this.onClear,
+    required this.onBack,
     required this.onVoice,
-    required this.onCancel,
   });
-  final TextEditingController ctrl;
-  final String query;
-  final void Function(String) onChanged, onSubmit;
-  final VoidCallback onClear, onVoice, onCancel;
+
+  final TextEditingController controller;
+  final FocusNode focusNode;
+  final bool showClear;
+  final ValueChanged<String> onChanged;
+  final VoidCallback onSubmit;
+  final VoidCallback onClear;
+  final VoidCallback onBack;
+  final VoidCallback onVoice;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      color: Colors.white,
-      padding: const EdgeInsets.fromLTRB(12, 8, 12, 8),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(space4, space8, space12, space8),
       child: Row(
         children: [
-          // Back arrow
-          GestureDetector(
-            onTap: onCancel,
+          Pressable(
+            scale: 0.88,
+            onTap: onBack,
+            semanticLabel: 'Retour',
             child: const Padding(
-              padding: EdgeInsets.only(right: 8),
-              child: Icon(Icons.arrow_back_ios_new_rounded,
-                  color: Colors.black, size: 20),
+              padding: EdgeInsets.all(space8),
+              child: ReelIcon(
+                ReelGlyph.back,
+                size: 22,
+                color: colorTextPrimary,
+              ),
             ),
           ),
-
-          // Search field
           Expanded(
             child: Container(
-              height: 40,
+              height: 42,
               decoration: BoxDecoration(
-                color: const Color(0xFFF2F2F2),
-                borderRadius: BorderRadius.circular(999),
+                color: colorBgCard,
+                borderRadius: BorderRadius.circular(radiusPill),
               ),
-              child: TextField(
-                controller: ctrl,
-                autofocus: true,
-                textInputAction: TextInputAction.search,
-                onChanged: onChanged,
-                onSubmitted: onSubmit,
-                style: const TextStyle(
-                    color: Colors.black, fontSize: 14, height: 1.4),
-                decoration: InputDecoration(
-                  hintText: 'Rechercher',
-                  hintStyle: const TextStyle(
-                      color: Color(0xFF8A8A8A), fontSize: 14),
-                  prefixIcon: const Icon(Icons.search_rounded,
-                      color: Color(0xFF8A8A8A), size: 20),
-                  suffixIcon: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (query.isNotEmpty)
-                        GestureDetector(
-                          onTap: onClear,
-                          child: const Padding(
-                            padding: EdgeInsets.only(right: 4),
-                            child: Icon(Icons.cancel_rounded,
-                                color: Color(0xFF8A8A8A), size: 18),
-                          ),
+              child: Row(
+                children: [
+                  const SizedBox(width: space12),
+                  const ReelIcon(
+                    ReelGlyph.search,
+                    size: 18,
+                    color: colorTextSecondaryDark,
+                  ),
+                  const SizedBox(width: space8),
+                  Expanded(
+                    child: TextField(
+                      controller: controller,
+                      focusNode: focusNode,
+                      textInputAction: TextInputAction.search,
+                      onChanged: onChanged,
+                      onSubmitted: (_) => onSubmit(),
+                      style: AppTokens.bodyS.copyWith(
+                        color: colorTextPrimary,
+                        fontSize: 14,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Rechercher des vidéos, créateurs…',
+                        hintStyle: AppTokens.bodyS.copyWith(
+                          color: colorTextSecondaryDark,
+                          fontSize: 14,
                         ),
-                      GestureDetector(
-                        onTap: onVoice,
-                        child: const Padding(
-                          padding: EdgeInsets.only(right: 10),
-                          child: Icon(Icons.mic_rounded,
-                              color: Color(0xFF8A8A8A), size: 20),
+                        filled: false,
+                        isDense: true,
+                        border: InputBorder.none,
+                        enabledBorder: InputBorder.none,
+                        focusedBorder: InputBorder.none,
+                        contentPadding: EdgeInsets.zero,
+                      ),
+                    ),
+                  ),
+                  if (showClear)
+                    Pressable(
+                      scale: 0.85,
+                      onTap: onClear,
+                      semanticLabel: 'Effacer',
+                      child: const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: space4),
+                        child: ReelIcon(
+                          ReelGlyph.close,
+                          size: 14,
+                          color: colorTextSecondaryDark,
                         ),
                       ),
-                    ],
+                    ),
+                  Pressable(
+                    scale: 0.85,
+                    onTap: onVoice,
+                    semanticLabel: 'Recherche vocale',
+                    child: const Padding(
+                      padding: EdgeInsets.symmetric(horizontal: space8),
+                      child: ReelIcon(
+                        ReelGlyph.mic,
+                        size: 18,
+                        color: colorTextSecondary,
+                      ),
+                    ),
                   ),
-                  border: InputBorder.none,
-                  contentPadding: const EdgeInsets.symmetric(vertical: 10),
-                ),
+                ],
               ),
             ),
           ),
-
-          // Search action
-          GestureDetector(
-            onTap: () => onSubmit(ctrl.text),
-            child: const Padding(
-              padding: EdgeInsets.only(left: 10),
+          Pressable(
+            scale: 0.92,
+            onTap: onSubmit,
+            child: Padding(
+              padding: const EdgeInsets.only(left: space12),
               child: Text(
                 'Rechercher',
-                style: TextStyle(
-                  color: Color(0xFFFE2C55),
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
+                style: AppTokens.labelM.copyWith(
+                  color: colorBrand,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ),
@@ -196,123 +264,224 @@ class _SearchBar extends StatelessWidget {
   }
 }
 
-// ─── Suggestions view ─────────────────────────────────────────────────────────
-class _SuggestionsView extends StatefulWidget {
-  const _SuggestionsView({
-    required this.history,
-    required this.suggestions,
-    required this.onTap,
-  });
+// ─────────────────────────────────────────────────────────────────────────────
+// Suggestions
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SuggestionsView extends ConsumerWidget {
+  const _SuggestionsView({required this.history, required this.onSearch});
+
   final List<String> history;
-  final List<_Suggestion> suggestions;
-  final void Function(String) onTap;
+  final ValueChanged<String> onSearch;
 
   @override
-  State<_SuggestionsView> createState() => _SuggestionsViewState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tags = ref.watch(trendingTagsProvider);
+    final creators = ref.watch(trendingCreatorsProvider);
 
-class _SuggestionsViewState extends State<_SuggestionsView> {
-  late final List<String> _history;
-  bool _showAll = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _history = List.from(widget.history);
-  }
-
-  void _dismiss(String item) => setState(() => _history.remove(item));
-
-  @override
-  Widget build(BuildContext context) {
     return ListView(
+      padding: const EdgeInsets.only(bottom: space32),
       children: [
-        // History
-        ..._history.map((h) => _HistoryTile(
-              text: h,
-              onTap: () => widget.onTap(h),
-              onDismiss: () => _dismiss(h),
-            )),
-        if (_history.isNotEmpty)
-          GestureDetector(
-            onTap: () => setState(() => _showAll = !_showAll),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 10),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Text(
-                    'Afficher plus',
-                    style: TextStyle(
-                      color: Colors.grey.shade600,
-                      fontSize: 13,
-                    ),
+        if (history.isNotEmpty) ...[
+          _SectionHeader(
+            title: 'Recherches récentes',
+            action: 'Effacer',
+            onAction: () => ref.read(searchHistoryProvider.notifier).clear(),
+          ),
+          for (final entry in history)
+            _HistoryTile(
+              text: entry,
+              onTap: () => onSearch(entry),
+              onDismiss: () =>
+                  ref.read(searchHistoryProvider.notifier).remove(entry),
+            ),
+        ] else
+          const _SearchHint(),
+        if (creators.isNotEmpty) ...[
+          const _SectionHeader(title: 'Créateurs du feed'),
+          SizedBox(
+            height: 100,
+            child: ListView.separated(
+              scrollDirection: Axis.horizontal,
+              padding: const EdgeInsets.symmetric(horizontal: gutter),
+              itemCount: creators.length,
+              separatorBuilder: (_, __) => const SizedBox(width: space16),
+              itemBuilder: (context, index) {
+                final creator = creators[index];
+                return SizedBox(
+                  width: 72,
+                  child: Column(
+                    children: [
+                      ReelAvatar(
+                        url: creator.avatar,
+                        name: creator.username,
+                        size: 60,
+                        showVerified: creator.verified,
+                        onTap: () => onSearch(
+                          creator.username.replaceFirst('@', ''),
+                        ),
+                      ),
+                      const SizedBox(height: space8),
+                      Text(
+                        creator.username,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        textAlign: TextAlign.center,
+                        style: AppTokens.labelS.copyWith(
+                          color: colorTextPrimary,
+                        ),
+                      ),
+                    ],
                   ),
-                  Icon(
-                    _showAll
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: Colors.grey.shade600,
-                    size: 18,
-                  ),
-                ],
-              ),
+                );
+              },
             ),
           ),
-
-        // "Tu pourrais aimer"
-        const Padding(
-          padding: EdgeInsets.fromLTRB(16, 12, 16, 8),
-          child: Text(
-            'Tu pourrais aimer',
-            style: TextStyle(
-              color: Colors.black,
-              fontSize: 15,
-              fontWeight: FontWeight.w700,
+        ],
+        if (tags.isNotEmpty) ...[
+          const _SectionHeader(title: 'Tendances'),
+          for (final tag in tags)
+            _TrendingTile(tag: tag, onTap: () => onSearch(tag.tag)),
+        ],
+        if (history.isEmpty && tags.isEmpty && creators.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(space32),
+            child: Text(
+              'Connecte un serveur ou active le mode démo pour voir les tendances.',
+              textAlign: TextAlign.center,
+              style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
             ),
           ),
-        ),
-        ...widget.suggestions.map((s) => _SuggestionTile(
-              suggestion: s,
-              onTap: () => widget.onTap(s.text),
-            )),
-        const SizedBox(height: 16),
       ],
     );
   }
 }
 
-// ─── History tile ─────────────────────────────────────────────────────────────
+class _SearchHint extends StatelessWidget {
+  const _SearchHint();
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, space32, gutter, space8),
+      child: Column(
+        children: [
+          Container(
+            width: 64,
+            height: 64,
+            decoration: const BoxDecoration(
+              color: colorBgCard,
+              shape: BoxShape.circle,
+            ),
+            child: const Center(
+              child: ReelIcon(
+                ReelGlyph.search,
+                size: 28,
+                color: colorTextSecondary,
+              ),
+            ),
+          ),
+          const SizedBox(height: space16),
+          Text(
+            'Cherche dans la source active',
+            style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+          ),
+          const SizedBox(height: space6),
+          Text(
+            'Titres, créateurs et hashtags. Tes recherches récentes apparaissent ici.',
+            textAlign: TextAlign.center,
+            style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SectionHeader extends StatelessWidget {
+  const _SectionHeader({required this.title, this.action, this.onAction});
+
+  final String title;
+  final String? action;
+  final VoidCallback? onAction;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, space20, gutter, space8),
+      child: Row(
+        children: [
+          Expanded(
+            child: Text(
+              title,
+              style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+            ),
+          ),
+          if (action != null)
+            Pressable(
+              scale: 0.92,
+              onTap: onAction,
+              child: Text(
+                action!,
+                style: AppTokens.labelM.copyWith(
+                  color: colorTextSecondaryDark,
+                ),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
 class _HistoryTile extends StatelessWidget {
   const _HistoryTile({
     required this.text,
     required this.onTap,
     required this.onDismiss,
   });
+
   final String text;
-  final VoidCallback onTap, onDismiss;
+  final VoidCallback onTap;
+  final VoidCallback onDismiss;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+          horizontal: gutter,
+          vertical: space10,
+        ),
         child: Row(
           children: [
-            const Icon(Icons.access_time_rounded,
-                color: Color(0xFF8A8A8A), size: 20),
-            const SizedBox(width: 12),
+            const ReelIcon(
+              ReelGlyph.clock,
+              size: 18,
+              color: colorTextSecondaryDark,
+            ),
+            const SizedBox(width: space12),
             Expanded(
               child: Text(
                 text,
-                style: const TextStyle(color: Colors.black, fontSize: 14),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTokens.bodyS.copyWith(color: colorTextPrimary),
               ),
             ),
-            GestureDetector(
+            Pressable(
+              scale: 0.85,
               onTap: onDismiss,
-              child: const Icon(Icons.close_rounded,
-                  color: Color(0xFF8A8A8A), size: 18),
+              semanticLabel: 'Supprimer « $text »',
+              child: const Padding(
+                padding: EdgeInsets.all(space4),
+                child: ReelIcon(
+                  ReelGlyph.close,
+                  size: 14,
+                  color: colorTextSecondaryDark,
+                ),
+              ),
             ),
           ],
         ),
@@ -321,54 +490,60 @@ class _HistoryTile extends StatelessWidget {
   }
 }
 
-// ─── Suggestion tile ──────────────────────────────────────────────────────────
-class _Suggestion {
-  const _Suggestion(this.text, this.isHot, this.isTrending);
-  final String text;
-  final bool isHot, isTrending;
-}
+class _TrendingTile extends StatelessWidget {
+  const _TrendingTile({required this.tag, required this.onTap});
 
-class _SuggestionTile extends StatelessWidget {
-  const _SuggestionTile({required this.suggestion, required this.onTap});
-  final _Suggestion suggestion;
+  final SearchTag tag;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
-    final dotColor = suggestion.isHot
-        ? const Color(0xFFFE2C55)
-        : suggestion.isTrending
-            ? const Color(0xFFFF8C00)
-            : const Color(0xFFCCCCCC);
-
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11),
+        padding: const EdgeInsets.symmetric(
+          horizontal: gutter,
+          vertical: space10,
+        ),
         child: Row(
           children: [
-            // Colored dot
             Container(
-              width: 8,
-              height: 8,
+              width: 34,
+              height: 34,
               decoration: BoxDecoration(
-                color: dotColor,
-                shape: BoxShape.circle,
+                color: colorBgCard,
+                borderRadius: BorderRadius.circular(radiusMd),
+              ),
+              child: const Center(
+                child: Text(
+                  '#',
+                  style: TextStyle(
+                    color: colorTextPrimary,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                  ),
+                ),
               ),
             ),
-            const SizedBox(width: 14),
+            const SizedBox(width: space12),
             Expanded(
               child: Text(
-                suggestion.text,
-                style: const TextStyle(color: Colors.black, fontSize: 14),
+                tag.tag,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTokens.bodyS.copyWith(color: colorTextPrimary),
               ),
             ),
-            if (suggestion.isTrending)
-              const Icon(
-                Icons.trending_up_rounded,
-                color: Color(0xFFFE2C55),
-                size: 18,
-              ),
+            Text(
+              countLabel(tag.videos, 'vidéo'),
+              style: AppTokens.labelS.copyWith(color: colorTextSecondaryDark),
+            ),
+            const SizedBox(width: space8),
+            const ReelIcon(
+              ReelGlyph.trend,
+              size: 16,
+              color: colorBrand,
+            ),
           ],
         ),
       ),
@@ -376,156 +551,99 @@ class _SuggestionTile extends StatelessWidget {
   }
 }
 
-// ─── Voice search modal ───────────────────────────────────────────────────────
-class _VoiceSearchModal extends StatefulWidget {
-  const _VoiceSearchModal();
+// ─────────────────────────────────────────────────────────────────────────────
+// Voice sheet
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _VoiceSheet extends StatefulWidget {
+  const _VoiceSheet();
 
   @override
-  State<_VoiceSearchModal> createState() => _VoiceSearchModalState();
+  State<_VoiceSheet> createState() => _VoiceSheetState();
 }
 
-class _VoiceSearchModalState extends State<_VoiceSearchModal>
+class _VoiceSheetState extends State<_VoiceSheet>
     with SingleTickerProviderStateMixin {
-  late final AnimationController _pulseCtrl;
-  late final Animation<double> _pulse;
-
-  @override
-  void initState() {
-    super.initState();
-    _pulseCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    )..repeat(reverse: true);
-    _pulse = Tween<double>(begin: 0.85, end: 1.15).animate(
-      CurvedAnimation(parent: _pulseCtrl, curve: Curves.easeInOut),
-    );
-  }
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 900),
+  )..repeat(reverse: true);
 
   @override
   void dispose() {
-    _pulseCtrl.dispose();
+    _pulse.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: MediaQuery.of(context).size.height,
-      color: Colors.white,
-      child: SafeArea(
-        child: Column(
-          children: [
-            // Top bar
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: const Icon(Icons.close, color: Colors.black, size: 24),
-                  ),
-                  GestureDetector(
-                    onTap: () {},
-                    child: const Row(
-                      children: [
-                        Icon(Icons.language_rounded,
-                            color: Colors.black, size: 18),
-                        SizedBox(width: 4),
-                        Text(
-                          'Français',
-                          style: TextStyle(
-                            color: Colors.black,
-                            fontSize: 14,
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-            ),
-
-            const SizedBox(height: 60),
-
-            // "Parle maintenant..."
-            const Text(
-              'Parle maintenant...',
-              style: TextStyle(
-                color: Colors.black,
-                fontSize: 22,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-
-            const Spacer(),
-
-            // Animated pulse circle
-            AnimatedBuilder(
-              animation: _pulse,
-              builder: (_, __) => Transform.scale(
-                scale: _pulse.value,
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, space8, gutter, space32),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Recherche vocale',
+            style: AppTokens.titleM.copyWith(color: colorTextPrimary),
+          ),
+          const SizedBox(height: space6),
+          Text(
+            'La dictée arrive dans une prochaine version.',
+            style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
+          ),
+          const SizedBox(height: space24),
+          AnimatedBuilder(
+            animation: _pulse,
+            builder: (context, _) {
+              return Transform.scale(
+                scale: 0.92 + _pulse.value * 0.12,
                 child: Container(
-                  width: 80,
-                  height: 80,
+                  width: 96,
+                  height: 96,
                   decoration: BoxDecoration(
                     shape: BoxShape.circle,
-                    color: const Color(0xFFFE2C55).withOpacity(0.15),
+                    color: colorBrand.withValues(alpha: 0.16),
                   ),
                   child: Center(
                     child: Container(
-                      width: 52,
-                      height: 52,
+                      width: 56,
+                      height: 56,
                       decoration: const BoxDecoration(
                         shape: BoxShape.circle,
-                        color: Color(0xFFFE2C55),
+                        color: colorBrand,
                       ),
                       child: const Center(
-                        child: CircleAvatar(
-                          radius: 18,
-                          backgroundColor: Colors.white,
+                        child: ReelIcon(
+                          ReelGlyph.music,
+                          size: 24,
+                          color: Colors.white,
                         ),
                       ),
                     ),
                   ),
                 ),
+              );
+            },
+          ),
+          const SizedBox(height: space24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton(
+              onPressed: () => Navigator.of(context).maybePop(),
+              style: FilledButton.styleFrom(
+                backgroundColor: colorBrand,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(radiusMd),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: space12),
+              ),
+              child: Text(
+                'Rechercher par texte',
+                style: AppTokens.titleS.copyWith(color: Colors.white),
               ),
             ),
-
-            const Spacer(),
-
-            // Sound search
-            GestureDetector(
-              onTap: () => Navigator.pop(context),
-              child: Container(
-                margin: const EdgeInsets.only(bottom: 40),
-                padding: const EdgeInsets.symmetric(
-                    horizontal: 24, vertical: 12),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFF2F2F2),
-                  borderRadius: BorderRadius.circular(99),
-                ),
-                child: const Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.music_note_rounded,
-                        color: Colors.black, size: 18),
-                    SizedBox(width: 6),
-                    Text(
-                      'Recherche de son',
-                      style: TextStyle(
-                        color: Colors.black,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w500,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }

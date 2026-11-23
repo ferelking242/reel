@@ -40,17 +40,17 @@ dependencies:
     git:
       url: https://github.com/kodjodevf/media-kit.git
       path: media_kit
-      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
   media_kit_video:
     git:
       url: https://github.com/kodjodevf/media-kit.git
       path: media_kit_video
-      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
   media_kit_libs_video:
     git:
       url: https://github.com/kodjodevf/media-kit.git
       path: libs/universal/media_kit_libs_video
-      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
 
   # ── UI ───────────────────────────────────────────────────────────────────────
   flex_color_scheme:    ^8.3.1
@@ -72,17 +72,17 @@ dependency_overrides:
     git:
       url: https://github.com/kodjodevf/media-kit.git
       path: media_kit
-      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
   media_kit_video:
     git:
       url: https://github.com/kodjodevf/media-kit.git
       path: media_kit_video
-      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
   media_kit_libs_video:
     git:
       url: https://github.com/kodjodevf/media-kit.git
       path: libs/universal/media_kit_libs_video
-      ref: f5796d287b642548e7e703bbc592f01dd7b1befe
+      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
 
 dev_dependencies:
   flutter_test:

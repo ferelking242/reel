@@ -5,7 +5,7 @@
 ///
 /// ReelShell utilise les providers et la DB fournis par watchtower —
 /// aucune duplication de cache, Isar, ou réseau.
-library reel;
+library;
 
 export 'features/feed/feed_screen.dart' show FeedScreen;
 export 'app.dart' show ReelApp;

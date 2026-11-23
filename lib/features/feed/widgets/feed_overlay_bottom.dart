@@ -1,8 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:marquee/marquee.dart';
+
+import '../../../core/icons/reel_icons.dart';
 import '../../../core/theme/tokens.dart';
+import '../../../core/utils/formatters.dart';
 import '../models/feed_item.dart';
 
+/// Bottom-left block of a feed page: author, description and sound.
 class FeedOverlayBottom extends StatelessWidget {
   const FeedOverlayBottom({super.key, required this.item});
 
@@ -14,59 +18,52 @@ class FeedOverlayBottom extends StatelessWidget {
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // Username
         Row(
           children: [
-            Text(
-              item.authorUsername,
-              style: const TextStyle(
-                color: colorTextPrimary,
-                fontSize: 15,
-                fontWeight: FontWeight.w700,
-                shadows: [
-                  Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 1)),
-                ],
+            Flexible(
+              child: Text(
+                item.authorUsername,
+                style: AppTokens.titleS.copyWith(
+                  color: colorTextPrimary,
+                  fontSize: 16,
+                  shadows: AppTokens.feedTextShadow,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
               ),
             ),
-            if (item.isFollowing) ...[
-              const SizedBox(width: 8),
-              Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                decoration: BoxDecoration(
-                  border: Border.all(color: colorTextPrimary, width: 1),
-                  borderRadius: BorderRadius.circular(radiusPill),
-                ),
-                child: const Text(
-                  'Suivi(e)',
-                  style: TextStyle(
-                    color: colorTextPrimary,
-                    fontSize: 11,
-                    fontWeight: FontWeight.w500,
-                  ),
+            if (item.authorVerified) ...[
+              const SizedBox(width: space4),
+              const ReelIcon(
+                ReelGlyph.verified,
+                size: 15,
+                color: colorVerified,
+              ),
+            ],
+            if (item.createdAt != null) ...[
+              const SizedBox(width: space8),
+              Text(
+                '· ${formatRelativeTime(item.createdAt!)}',
+                style: AppTokens.labelS.copyWith(
+                  color: colorTextTertiary,
+                  shadows: AppTokens.feedTextShadow,
                 ),
               ),
             ],
           ],
         ),
-        const SizedBox(height: 6),
-
-        // Description + hashtags
+        const SizedBox(height: space6),
         _ExpandableDescription(item: item),
-        const SizedBox(height: 10),
-
-        // Son (marquee)
+        const SizedBox(height: space10),
         _SoundTicker(soundName: item.soundName),
       ],
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Description avec hashtags en couleur
-// ─────────────────────────────────────────────────────────────────────────────
 class _ExpandableDescription extends StatefulWidget {
   const _ExpandableDescription({required this.item});
+
   final FeedItem item;
 
   @override
@@ -78,78 +75,148 @@ class _ExpandableDescriptionState extends State<_ExpandableDescription> {
 
   @override
   Widget build(BuildContext context) {
-    final spans = <InlineSpan>[
-      TextSpan(
-        text: widget.item.title,
-        style: const TextStyle(
-          color: colorTextPrimary,
-          fontSize: 13,
-          height: 1.4,
-          shadows: [
-            Shadow(color: Colors.black54, blurRadius: 8, offset: Offset(0, 1)),
-          ],
-        ),
-      ),
-      const TextSpan(text: ' '),
-      ...widget.item.hashtags.map(
-        (tag) => TextSpan(
-          text: '#$tag ',
-          style: const TextStyle(
-            color: Color(0xFFE8E8E8),
-            fontSize: 13,
-            fontWeight: FontWeight.w600,
-            shadows: [
-              Shadow(color: Colors.black54, blurRadius: 8),
-            ],
-          ),
-        ),
-      ),
-    ];
+    final spans = _buildSpans();
+    const collapsedLines = 2;
 
-    return GestureDetector(
-      onTap: () => setState(() => _expanded = !_expanded),
-      child: RichText(
-        maxLines: _expanded ? null : 2,
-        overflow: _expanded ? TextOverflow.visible : TextOverflow.ellipsis,
-        text: TextSpan(children: spans),
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final baseStyle = DefaultTextStyle.of(context).style.merge(
+          _descriptionStyle,
+        );
+        final painter = TextPainter(
+          text: TextSpan(children: spans, style: baseStyle),
+          maxLines: collapsedLines,
+          textDirection: Directionality.of(context),
+          textScaler: MediaQuery.textScalerOf(context),
+        )..layout(maxWidth: constraints.maxWidth);
+
+        final overflows = painter.didExceedMaxLines;
+        painter.dispose();
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            AnimatedSize(
+              duration: durationNormal,
+              curve: ReelCurves.emphasized,
+              alignment: Alignment.topLeft,
+              child: RichText(
+                maxLines: _expanded ? null : collapsedLines,
+                overflow: _expanded
+                    ? TextOverflow.visible
+                    : TextOverflow.ellipsis,
+                text: TextSpan(children: spans, style: baseStyle),
+              ),
+            ),
+            if (overflows || _expanded)
+              GestureDetector(
+                onTap: () => setState(() => _expanded = !_expanded),
+                behavior: HitTestBehavior.opaque,
+                child: Padding(
+                  padding: const EdgeInsets.only(top: space4),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        _expanded ? 'moins' : 'plus',
+                        style: AppTokens.labelM.copyWith(
+                          color: colorTextSecondary,
+                          fontWeight: FontWeight.w700,
+                          shadows: AppTokens.feedTextShadow,
+                        ),
+                      ),
+                      AnimatedRotation(
+                        turns: _expanded ? 0.5 : 0,
+                        duration: durationFast,
+                        child: const ReelIcon(
+                          ReelGlyph.chevronDown,
+                          size: 14,
+                          color: colorTextSecondary,
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+          ],
+        );
+      },
     );
+  }
+
+  static final TextStyle _descriptionStyle = AppTokens.bodyS.copyWith(
+    color: colorTextPrimary,
+    height: 1.45,
+    shadows: AppTokens.feedTextShadow,
+  );
+
+  List<InlineSpan> _buildSpans() {
+    return [
+      TextSpan(text: widget.item.title),
+      for (final tag in widget.item.hashtags)
+        TextSpan(
+          text: ' #$tag',
+          style: const TextStyle(fontWeight: FontWeight.w700),
+        ),
+    ];
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Ticker (marquee) pour le nom du son
-// ─────────────────────────────────────────────────────────────────────────────
 class _SoundTicker extends StatelessWidget {
   const _SoundTicker({required this.soundName});
+
   final String soundName;
 
   @override
   Widget build(BuildContext context) {
+    final style = AppTokens.bodyS.copyWith(
+      color: colorTextPrimary,
+      fontWeight: FontWeight.w500,
+      shadows: AppTokens.feedTextShadow,
+    );
+
     return Row(
       children: [
-        const Icon(Icons.music_note_rounded,
-            color: colorTextPrimary, size: 14),
-        const SizedBox(width: 6),
+        const ReelIcon(ReelGlyph.music, size: 14, color: colorTextPrimary),
+        const SizedBox(width: space6),
         Expanded(
           child: SizedBox(
             height: 18,
-            child: Marquee(
-              text: soundName,
-              style: const TextStyle(
-                color: colorTextPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-                shadows: [
-                  Shadow(color: Colors.black54, blurRadius: 8),
-                ],
-              ),
-              scrollAxis: Axis.horizontal,
-              velocity: 40,
-              blankSpace: 80,
-              pauseAfterRound: const Duration(seconds: 2),
-              startPadding: 0,
-            ),
+            child: soundName.isEmpty
+                ? const SizedBox.shrink()
+                : LayoutBuilder(
+                    builder: (context, constraints) {
+                      final painter = TextPainter(
+                        text: TextSpan(text: soundName, style: style),
+                        textDirection: Directionality.of(context),
+                        maxLines: 1,
+                      )..layout();
+                      final fits = painter.width <= constraints.maxWidth;
+                      painter.dispose();
+
+                      if (fits) {
+                        return Align(
+                          alignment: Alignment.centerLeft,
+                          child: Text(
+                            soundName,
+                            style: style,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        );
+                      }
+                      return Marquee(
+                        text: soundName,
+                        style: style,
+                        scrollAxis: Axis.horizontal,
+                        velocity: 32,
+                        blankSpace: 60,
+                        pauseAfterRound: const Duration(seconds: 2),
+                        startPadding: 0,
+                      );
+                    },
+                  ),
           ),
         ),
       ],

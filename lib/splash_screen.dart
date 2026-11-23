@@ -1,6 +1,12 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 
+import 'core/icons/reel_icons.dart';
+import 'core/theme/tokens.dart';
+
+/// Brand splash: the Reel mark pops in, then the feed takes over.
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -10,126 +16,176 @@ class SplashScreen extends StatefulWidget {
 
 class _SplashScreenState extends State<SplashScreen>
     with TickerProviderStateMixin {
-  late final AnimationController _logoCtrl;
-  late final AnimationController _dotsCtrl;
-  late final Animation<double> _logoFade;
-  late final Animation<double> _dot1Bounce;
-  late final Animation<double> _dot2Bounce;
+  late final AnimationController _entrance = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  );
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1600),
+  )..repeat(reverse: true);
+
+  Timer? _navigationTimer;
+  bool _navigated = false;
 
   @override
   void initState() {
     super.initState();
+    _entrance.forward();
+    _navigationTimer = Timer(const Duration(milliseconds: 1500), _goToFeed);
+  }
 
-    _logoCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 800),
-    );
-    _dotsCtrl = AnimationController(
-      vsync: this,
-      duration: const Duration(milliseconds: 600),
-    )..repeat(reverse: true);
-
-    _logoFade = CurvedAnimation(parent: _logoCtrl, curve: Curves.easeOut);
-    _dot1Bounce = Tween<double>(begin: 0, end: -8).animate(
-      CurvedAnimation(parent: _dotsCtrl, curve: Curves.easeInOut),
-    );
-    _dot2Bounce = Tween<double>(begin: -8, end: 0).animate(
-      CurvedAnimation(parent: _dotsCtrl, curve: Curves.easeInOut),
-    );
-
-    _logoCtrl.forward();
-
-    Future.delayed(const Duration(milliseconds: 2200), () {
-      if (mounted) context.go('/feed');
-    });
+  void _goToFeed() {
+    if (_navigated || !mounted) return;
+    _navigated = true;
+    context.go('/');
   }
 
   @override
   void dispose() {
-    _logoCtrl.dispose();
-    _dotsCtrl.dispose();
+    _navigationTimer?.cancel();
+    _entrance.dispose();
+    _pulse.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: const Color(0xFF131824),
-      body: Center(
-        child: FadeTransition(
-          opacity: _logoFade,
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              // TikTok-style music note logo with dual shadow
-              SizedBox(
-                width: 120,
-                height: 120,
-                child: Stack(
-                  alignment: Alignment.center,
+    final logoScale = CurvedAnimation(
+      parent: _entrance,
+      curve: const Interval(0, 0.65, curve: Curves.easeOutBack),
+    );
+    final textFade = CurvedAnimation(
+      parent: _entrance,
+      curve: const Interval(0.35, 1, curve: Curves.easeOut),
+    );
+
+    return GestureDetector(
+      onTap: _goToFeed,
+      child: Scaffold(
+        backgroundColor: colorBgBase,
+        body: Stack(
+          children: [
+            // Ambient brand glows.
+            const Positioned(
+              top: -120,
+              right: -80,
+              child: _Glow(color: colorBrand, size: 320),
+            ),
+            const Positioned(
+              bottom: -140,
+              left: -100,
+              child: _Glow(color: colorBrandCyan, size: 300),
+            ),
+            Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  AnimatedBuilder(
+                    animation: _pulse,
+                    builder: (context, child) {
+                      final glow = 0.6 + _pulse.value * 0.4;
+                      return Opacity(opacity: glow, child: child);
+                    },
+                    child: ScaleTransition(
+                      scale: logoScale,
+                      child: const ReelMark(size: 104),
+                    ),
+                  ),
+                  const SizedBox(height: space24),
+                  FadeTransition(
+                    opacity: textFade,
+                    child: Column(
+                      children: [
+                        ShaderMask(
+                          shaderCallback: (bounds) => const LinearGradient(
+                            colors: [Colors.white, Color(0xFFD8D8DA)],
+                          ).createShader(bounds),
+                          child: const Text(
+                            'Reel',
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontSize: 40,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -1,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: space6),
+                        Text(
+                          'Propulsé par Watchtower',
+                          style: AppTokens.labelS.copyWith(
+                            color: colorTextSecondaryDark,
+                            letterSpacing: 1.2,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 48,
+              child: FadeTransition(
+                opacity: textFade,
+                child: Column(
                   children: [
-                    // Cyan shadow
-                    Transform.translate(
-                      offset: const Offset(-3, 3),
-                      child: const Icon(
-                        Icons.music_note_rounded,
-                        size: 90,
-                        color: Color(0x8069C9D0),
+                    SizedBox(
+                      width: 96,
+                      height: 2,
+                      child: AnimatedBuilder(
+                        animation: _entrance,
+                        builder: (context, _) {
+                          return LinearProgressIndicator(
+                            value: _entrance.value,
+                            backgroundColor: colorDivider,
+                            valueColor: const AlwaysStoppedAnimation(
+                              colorBrand,
+                            ),
+                            minHeight: 2,
+                          );
+                        },
                       ),
                     ),
-                    // Red shadow
-                    Transform.translate(
-                      offset: const Offset(3, -3),
-                      child: const Icon(
-                        Icons.music_note_rounded,
-                        size: 90,
-                        color: Color(0x80FE2C55),
+                    const SizedBox(height: space12),
+                    Text(
+                      'Touche pour continuer',
+                      style: AppTokens.caption.copyWith(
+                        color: colorTextSecondaryDark,
                       ),
-                    ),
-                    // Main white icon
-                    const Icon(
-                      Icons.music_note_rounded,
-                      size: 90,
-                      color: Color(0xFF1A2035),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 32),
-              // Bouncing dots
-              AnimatedBuilder(
-                animation: _dotsCtrl,
-                builder: (_, __) {
-                  return Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Transform.translate(
-                        offset: Offset(0, _dot1Bounce.value),
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFF69C9D0),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Transform.translate(
-                        offset: Offset(0, _dot2Bounce.value),
-                        child: Container(
-                          width: 10,
-                          height: 10,
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFFE2C55),
-                            shape: BoxShape.circle,
-                          ),
-                        ),
-                      ),
-                    ],
-                  );
-                },
-              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _Glow extends StatelessWidget {
+  const _Glow({required this.color, required this.size});
+
+  final Color color;
+  final double size;
+
+  @override
+  Widget build(BuildContext context) {
+    return IgnorePointer(
+      child: Container(
+        width: size,
+        height: size,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: RadialGradient(
+            colors: [
+              color.withValues(alpha: 0.22),
+              Colors.transparent,
             ],
           ),
         ),

@@ -1,227 +1,265 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/tokens.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-class InboxScreen extends StatelessWidget {
+import '../../core/icons/reel_icons.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/widgets/pressable.dart';
+import '../../core/widgets/reel_avatar.dart';
+import '../../core/widgets/reel_bottom_nav.dart';
+import '../../core/widgets/reel_sheet.dart';
+import '../feed/providers/feed_provider.dart';
+import '../feed/widgets/create_sheet.dart';
+import '../feed/widgets/item_sheet.dart';
+import 'providers/inbox_provider.dart';
+
+class InboxScreen extends ConsumerWidget {
   const InboxScreen({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final tab = ref.watch(inboxTabProvider);
+    final entries = ref.watch(visibleActivityProvider);
+    final unread = ref.watch(unreadInboxProvider);
+    final seen = ref.watch(inboxReadProvider);
+
     return Scaffold(
       backgroundColor: colorBgBase,
-      appBar: AppBar(
-        backgroundColor: colorBgBase,
-        foregroundColor: colorTextPrimary,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: colorTextPrimary),
-        title: const Text(
-          'Boîte de réception',
-          style: TextStyle(
-            color: colorTextPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.done_all_rounded, color: colorTextPrimary),
-            tooltip: 'Tout marquer comme lu',
-            onPressed: () {},
-          ),
-        ],
-      ),
-
-      body: DefaultTabController(
-        length: 3,
+      body: SafeArea(
+        bottom: false,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Tabs ──────────────────────────────────────────────────────
-            const TabBar(
-              indicatorColor: colorBrand,
-              indicatorWeight: 2,
-              labelColor: colorTextPrimary,
-              unselectedLabelColor: colorTextSecondary,
-              labelStyle: TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
-              unselectedLabelStyle: TextStyle(fontSize: 13),
-              tabs: [
-                Tab(text: 'Tout'),
-                Tab(text: 'Mentions'),
-                Tab(text: 'Activité'),
-              ],
-            ),
-            const Divider(color: colorDivider, height: 1),
-
-            Expanded(
-              child: TabBarView(
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, space8, space8, 0),
+              child: Row(
                 children: [
-                  _AllNotifications(),
-                  _EmptyTab(
-                    icon: Icons.alternate_email_rounded,
-                    title: 'Aucune mention',
-                    subtitle: 'Quand quelqu\'un te mentionne, c\'est ici.',
+                  Text(
+                    'Boîte de réception',
+                    style: AppTokens.titleM.copyWith(
+                      color: colorTextPrimary,
+                    ),
                   ),
-                  _EmptyTab(
-                    icon: Icons.favorite_border_rounded,
-                    title: 'Aucune activité',
-                    subtitle: 'Tes likes et commentaires apparaîtront ici.',
+                  const Spacer(),
+                  Pressable(
+                    scale: 0.9,
+                    onTap: unread == 0
+                        ? null
+                        : () {
+                            ref.read(inboxReadProvider.notifier).markSeen(
+                                  [
+                                    ...ref.read(activityProvider),
+                                    ...ref.read(systemMessagesProvider),
+                                  ].map((e) => e.id),
+                                );
+                            showReelToast(
+                              context,
+                              'Tout est marqué comme lu',
+                            );
+                          },
+                    semanticLabel: 'Tout marquer comme lu',
+                    child: Padding(
+                      padding: const EdgeInsets.all(space8),
+                      child: ReelIcon(
+                        ReelGlyph.check,
+                        size: 20,
+                        color: unread == 0
+                            ? colorTextSecondaryDark
+                            : colorTextPrimary,
+                      ),
+                    ),
                   ),
                 ],
               ),
             ),
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, space8, gutter, space12),
+              child: _SegmentedTabs(
+                selected: tab,
+                onSelect: (index) =>
+                    ref.read(inboxTabProvider.notifier).select(index),
+                labels: const ['Tout', 'Activité', 'Système'],
+              ),
+            ),
+            Expanded(
+              child: entries.isEmpty
+                  ? const _InboxEmpty()
+                  : ListView.separated(
+                      padding: const EdgeInsets.only(bottom: space32),
+                      itemCount: entries.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 0.5, indent: 76),
+                      itemBuilder: (context, index) {
+                        final entry = entries[index];
+                        final isUnread = !seen.contains(entry.id);
+                        return _ActivityTile(
+                          entry: entry,
+                          unread: isUnread,
+                          onTap: () => _open(context, ref, entry),
+                        );
+                      },
+                    ),
+            ),
           ],
         ),
+      ),
+      bottomNavigationBar: ReelBottomNav(
+        currentIndex: 3,
+        unreadCount: unread,
+        onSelect: (index) {
+          switch (index) {
+            case 0:
+              context.go('/');
+            case 1:
+              context.go('/friends');
+            case 4:
+              context.go('/profile');
+          }
+        },
+        onCreate: () => showCreateSheet(context),
+      ),
+    );
+  }
+
+  void _open(BuildContext context, WidgetRef ref, ActivityEntry entry) {
+    ref.read(inboxReadProvider.notifier).markSeen([entry.id]);
+    final itemId = entry.itemId;
+    if (itemId == null) {
+      showReelToast(
+        context,
+        entry.subtitle,
+        icon: ReelGlyph.inbox,
+      );
+      return;
+    }
+    final items = ref.read(feedItemsProvider).asData?.value ?? const [];
+    final item = items.where((i) => i.id == itemId).firstOrNull;
+    if (item == null) {
+      showReelToast(context, 'Cette vidéo n\'est plus dans le feed');
+      return;
+    }
+    showItemSheet(context, item: item);
+  }
+}
+
+class _SegmentedTabs extends StatelessWidget {
+  const _SegmentedTabs({
+    required this.selected,
+    required this.onSelect,
+    required this.labels,
+  });
+
+  final int selected;
+  final ValueChanged<int> onSelect;
+  final List<String> labels;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: colorBgCard,
+        borderRadius: BorderRadius.circular(radiusPill),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => onSelect(i),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: durationNormal,
+                  curve: ReelCurves.emphasized,
+                  decoration: BoxDecoration(
+                    color: selected == i ? colorBgElevated : Colors.transparent,
+                    borderRadius: BorderRadius.circular(radiusPill),
+                  ),
+                  child: Center(
+                    child: Text(
+                      labels[i],
+                      style: AppTokens.labelM.copyWith(
+                        color: selected == i
+                            ? colorTextPrimary
+                            : colorTextSecondaryDark,
+                        fontWeight: selected == i
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Toutes les notifs (placeholder)
-// ─────────────────────────────────────────────────────────────────────────────
-class _AllNotifications extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: [
-        _NotifGroup(title: 'Aujourd\'hui', items: const [
-          _NotifItem(
-            icon: Icons.favorite_rounded,
-            iconColor: Color(0xFFEE1D52),
-            text: 'Nouvelle activité sur tes vidéos.',
-            time: 'Il y a 2 min',
-            unread: true,
-          ),
-          _NotifItem(
-            icon: Icons.person_add_rounded,
-            iconColor: Color(0xFF69C9D0),
-            text: 'Quelqu\'un s\'est abonné à ton compte.',
-            time: 'Il y a 1 h',
-            unread: true,
-          ),
-        ]),
-        _NotifGroup(title: 'Cette semaine', items: const [
-          _NotifItem(
-            icon: Icons.comment_rounded,
-            iconColor: Color(0xFFFFFFFF),
-            text: 'Un commentaire sur l\'une de tes vidéos.',
-            time: 'Lundi',
-            unread: false,
-          ),
-          _NotifItem(
-            icon: Icons.share_rounded,
-            iconColor: Color(0xFF69C9D0),
-            text: 'Ta vidéo a été partagée.',
-            time: 'Dimanche',
-            unread: false,
-          ),
-        ]),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Groupe de notifs
-// ─────────────────────────────────────────────────────────────────────────────
-class _NotifGroup extends StatelessWidget {
-  const _NotifGroup({required this.title, required this.items});
-  final String title;
-  final List<_NotifItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-          child: Text(
-            title,
-            style: const TextStyle(
-              color: colorTextSecondary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.4,
-            ),
-          ),
-        ),
-        ...items,
-        const Divider(color: colorDivider, height: 1),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Item de notification
-// ─────────────────────────────────────────────────────────────────────────────
-class _NotifItem extends StatelessWidget {
-  const _NotifItem({
-    required this.icon,
-    required this.iconColor,
-    required this.text,
-    required this.time,
+class _ActivityTile extends StatelessWidget {
+  const _ActivityTile({
+    required this.entry,
     required this.unread,
+    required this.onTap,
   });
 
-  final IconData icon;
-  final Color iconColor;
-  final String text;
-  final String time;
+  final ActivityEntry entry;
   final bool unread;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return InkWell(
-      onTap: () {},
-      child: Container(
-        color: unread ? const Color(0x0AFFFFFF) : Colors.transparent,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      onTap: onTap,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(gutter, space12, gutter, space12),
         child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Icône
-            Container(
-              width: 44, height: 44,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: colorBgCard,
-                border: Border.all(color: colorDivider),
-              ),
-              child: Icon(icon, color: iconColor, size: 20),
-            ),
-            const SizedBox(width: 12),
-
-            // Texte
+            _Leading(entry: entry),
+            const SizedBox(width: space12),
             Expanded(
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    text,
-                    style: TextStyle(
+                    entry.title,
+                    style: AppTokens.bodyS.copyWith(
                       color: colorTextPrimary,
-                      fontSize: 13,
-                      fontWeight: unread ? FontWeight.w600 : FontWeight.w400,
+                      fontWeight:
+                          unread ? FontWeight.w700 : FontWeight.w500,
                     ),
                   ),
-                  const SizedBox(height: 3),
-                  Text(time,
-                      style: const TextStyle(
-                        color: colorTextSecondary, fontSize: 11,
-                      )),
+                  const SizedBox(height: 2),
+                  Text(
+                    entry.subtitle,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTokens.labelS.copyWith(
+                      color: colorTextSecondaryDark,
+                      height: 1.35,
+                    ),
+                  ),
+                  const SizedBox(height: space4),
+                  Text(
+                    activityTimeLabel(entry),
+                    style: AppTokens.caption.copyWith(
+                      color: colorTextTertiary,
+                    ),
+                  ),
                 ],
               ),
             ),
-
-            // Point non lu
             if (unread)
               Container(
-                width: 8, height: 8,
-                margin: const EdgeInsets.only(left: 8),
+                margin: const EdgeInsets.only(top: space8, left: space8),
+                width: 8,
+                height: 8,
                 decoration: const BoxDecoration(
-                  shape: BoxShape.circle,
                   color: colorBrand,
+                  shape: BoxShape.circle,
                 ),
               ),
           ],
@@ -231,41 +269,99 @@ class _NotifItem extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tab vide
-// ─────────────────────────────────────────────────────────────────────────────
-class _EmptyTab extends StatelessWidget {
-  const _EmptyTab({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-  });
-  final IconData icon;
-  final String title;
-  final String subtitle;
+class _Leading extends StatelessWidget {
+  const _Leading({required this.entry});
+
+  final ActivityEntry entry;
+
+  @override
+  Widget build(BuildContext context) {
+    final (glyph, color) = switch (entry.kind) {
+      ActivityKind.like => (ReelGlyph.heart, colorLike),
+      ActivityKind.save => (ReelGlyph.bookmark, colorWarning),
+      ActivityKind.follow => (ReelGlyph.friends, colorBrandCyan),
+      ActivityKind.comment => (ReelGlyph.comment, const Color(0xFF7C3AED)),
+      ActivityKind.system => (ReelGlyph.effects, colorTextSecondary),
+    };
+
+    if (entry.kind == ActivityKind.system) {
+      return Container(
+        width: 48,
+        height: 48,
+        decoration: BoxDecoration(
+          color: colorBgCard,
+          borderRadius: BorderRadius.circular(radiusLg),
+        ),
+        child: Center(child: ReelIcon(glyph, size: 22, color: color)),
+      );
+    }
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        ReelAvatar(
+          url: entry.avatarUrl,
+          name: entry.title,
+          size: 48,
+        ),
+        Positioned(
+          right: -4,
+          bottom: -4,
+          child: Container(
+            width: 20,
+            height: 20,
+            decoration: BoxDecoration(
+              color: color,
+              shape: BoxShape.circle,
+              border: Border.all(color: colorBgBase, width: 2),
+            ),
+            child: Center(
+              child: ReelIcon(glyph, size: 10, color: Colors.white),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _InboxEmpty extends StatelessWidget {
+  const _InboxEmpty();
 
   @override
   Widget build(BuildContext context) {
     return Center(
       child: Padding(
-        padding: const EdgeInsets.all(32),
+        padding: const EdgeInsets.all(space32),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(icon, size: 52, color: colorTextSecondary),
-            const SizedBox(height: 16),
-            Text(title,
-                style: const TextStyle(
-                  color: colorTextPrimary,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w600,
-                )),
-            const SizedBox(height: 8),
-            Text(subtitle,
-                style: const TextStyle(
-                  color: colorTextSecondary, fontSize: 13,
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: colorBgCard,
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: ReelIcon(
+                  ReelGlyph.inbox,
+                  size: 26,
+                  color: colorTextSecondaryDark,
                 ),
-                textAlign: TextAlign.center),
+              ),
+            ),
+            const SizedBox(height: space16),
+            Text(
+              'Rien pour le moment',
+              style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+            ),
+            const SizedBox(height: space6),
+            Text(
+              'Aime, enregistre ou commente une vidéo pour voir ton activité ici.',
+              textAlign: TextAlign.center,
+              style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
+            ),
           ],
         ),
       ),

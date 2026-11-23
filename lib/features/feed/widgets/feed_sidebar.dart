@@ -1,133 +1,104 @@
 import 'package:flutter/material.dart';
-import 'package:cached_network_image/cached_network_image.dart';
-import '../../../core/theme/tokens.dart';
-import '../models/feed_item.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class FeedSidebar extends StatefulWidget {
-  const FeedSidebar({super.key, required this.item});
+import '../../../core/haptics.dart';
+import '../../../core/icons/reel_icons.dart';
+import '../../../core/theme/tokens.dart';
+import '../../../core/utils/formatters.dart';
+import '../../../core/widgets/pressable.dart';
+import '../../../core/widgets/reel_avatar.dart';
+import '../../../core/widgets/reel_sheet.dart';
+import '../models/feed_item.dart';
+import '../providers/engagement_provider.dart';
+
+/// Right-hand action rail of the feed: follow, like, comment, save, share and
+/// the spinning sound disc.
+class FeedSidebar extends ConsumerWidget {
+  const FeedSidebar({
+    super.key,
+    required this.item,
+    required this.isActive,
+    required this.onOpenComments,
+    required this.onOpenShare,
+  });
 
   final FeedItem item;
+  final bool isActive;
+  final VoidCallback onOpenComments;
+  final VoidCallback onOpenShare;
 
   @override
-  State<FeedSidebar> createState() => _FeedSidebarState();
-}
+  Widget build(BuildContext context, WidgetRef ref) {
+    final engagement = ref.watch(engagementProvider);
+    final liked = engagement.isLiked(item.id);
+    final saved = engagement.isSaved(item.id);
+    final following = engagement.isFollowing(item.authorUsername);
+    final localComments = ref.watch(commentsProvider)[item.id]?.length ?? 0;
 
-class _FeedSidebarState extends State<FeedSidebar> {
-  bool _liked = false;
-  bool _bookmarked = false;
-
-  void _toggleLike() => setState(() => _liked = !_liked);
-  void _toggleBookmark() => setState(() => _bookmarked = !_bookmarked);
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        // Avatar + bouton Follow
-        _AvatarWithFollow(avatarUrl: widget.item.authorAvatar),
-        const SizedBox(height: space24),
-
-        // Like
-        _ActionButton(
-          icon: _liked ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-          iconColor: _liked ? colorLike : colorTextPrimary,
-          label: widget.item.formattedLikes,
-          onTap: _toggleLike,
-          animated: true,
-          isActive: _liked,
-        ),
-        const SizedBox(height: space20),
-
-        // Commentaires
-        _ActionButton(
-          icon: Icons.chat_bubble_rounded,
-          label: widget.item.formattedComments,
-          onTap: () {},
-        ),
-        const SizedBox(height: space20),
-
-        // Sauvegarder
-        _ActionButton(
-          icon: _bookmarked
-              ? Icons.bookmark_rounded
-              : Icons.bookmark_border_rounded,
-          iconColor: _bookmarked ? colorBrandCyan : colorTextPrimary,
-          label: widget.item.formattedBookmarks,
-          onTap: _toggleBookmark,
-        ),
-        const SizedBox(height: space20),
-
-        // Partager
-        _ActionButton(
-          icon: Icons.reply_rounded, // miroir horizontal = partager TikTok
-          label: widget.item.formattedShares,
-          onTap: () {},
-          iconMirror: true,
-        ),
-        const SizedBox(height: space20),
-
-        // Disque tournant (son)
-        _SpinningDisc(avatarUrl: widget.item.authorAvatar),
-      ],
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Avatar + bouton +
-// ─────────────────────────────────────────────────────────────────────────────
-class _AvatarWithFollow extends StatelessWidget {
-  const _AvatarWithFollow({required this.avatarUrl});
-  final String avatarUrl;
-
-  @override
-  Widget build(BuildContext context) {
     return SizedBox(
-      width: 48,
-      height: 56,
-      child: Stack(
-        clipBehavior: Clip.none,
-        alignment: Alignment.topCenter,
+      width: AppTokens.sidebarWidth,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
-          // Avatar
-          Container(
-            width: 48,
-            height: 48,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              border: Border.all(color: colorTextPrimary, width: 1.5),
-            ),
-            child: ClipOval(
-              child: CachedNetworkImage(
-                imageUrl: avatarUrl,
-                fit: BoxFit.cover,
-                placeholder: (_, __) => Container(color: colorBgCard),
-                errorWidget: (_, __, ___) => Container(
-                  color: colorBgCard,
-                  child: const Icon(Icons.person_rounded,
-                      color: colorTextSecondary, size: 24),
-                ),
-              ),
-            ),
+          _AvatarWithFollow(
+            item: item,
+            following: following,
+            onToggleFollow: () {
+              ref
+                  .read(engagementProvider.notifier)
+                  .toggleFollow(item.authorUsername);
+            },
           ),
-          // Bouton +
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: Center(
-              child: Container(
-                width: 20,
-                height: 20,
-                decoration: const BoxDecoration(
-                  color: colorBrand,
-                  shape: BoxShape.circle,
-                ),
-                child: const Icon(Icons.add_rounded,
-                    color: colorTextPrimary, size: 14),
-              ),
-            ),
+          const SizedBox(height: space24),
+          _SidebarAction(
+            glyph: ReelGlyph.heart,
+            label: formatCount(item.likes + (liked ? 1 : 0)),
+            active: liked,
+            activeColor: colorLike,
+            semanticLabel: liked ? 'Retirer le like' : "J'aime",
+            onTap: () {
+              final nowLiked =
+                  ref.read(engagementProvider.notifier).toggleLike(item.id);
+              if (nowLiked) Haptics.medium();
+            },
+          ),
+          const SizedBox(height: space20),
+          _SidebarAction(
+            glyph: ReelGlyph.comment,
+            label: formatCount(item.comments + localComments),
+            semanticLabel: 'Commentaires',
+            onTap: onOpenComments,
+          ),
+          const SizedBox(height: space20),
+          _SidebarAction(
+            glyph: ReelGlyph.bookmark,
+            label: formatCount(item.bookmarks + (saved ? 1 : 0)),
+            active: saved,
+            activeColor: colorWarning,
+            semanticLabel:
+                saved ? 'Retirer des favoris' : 'Ajouter aux favoris',
+            onTap: () {
+              final nowSaved =
+                  ref.read(engagementProvider.notifier).toggleSave(item.id);
+              Haptics.light();
+              showReelToast(
+                context,
+                nowSaved ? 'Ajouté à tes favoris' : 'Retiré de tes favoris',
+                icon: nowSaved ? ReelGlyph.bookmark : ReelGlyph.trash,
+              );
+            },
+          ),
+          const SizedBox(height: space20),
+          _SidebarAction(
+            glyph: ReelGlyph.share,
+            label: formatCount(item.shares),
+            semanticLabel: 'Partager',
+            onTap: onOpenShare,
+          ),
+          const SizedBox(height: space20),
+          _SpinningDisc(
+            item: item,
+            spinning: isActive && item.hasVideo,
           ),
         ],
       ),
@@ -135,101 +106,216 @@ class _AvatarWithFollow extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Bouton d'action (icône + compteur)
-// ─────────────────────────────────────────────────────────────────────────────
-class _ActionButton extends StatefulWidget {
-  const _ActionButton({
-    required this.icon,
-    required this.label,
-    required this.onTap,
-    this.iconColor = colorTextPrimary,
-    this.animated = false,
-    this.isActive = false,
-    this.iconMirror = false,
+class _AvatarWithFollow extends StatefulWidget {
+  const _AvatarWithFollow({
+    required this.item,
+    required this.following,
+    required this.onToggleFollow,
   });
 
-  final IconData icon;
-  final String label;
-  final VoidCallback onTap;
-  final Color iconColor;
-  final bool animated;
-  final bool isActive;
-  final bool iconMirror;
+  final FeedItem item;
+  final bool following;
+  final VoidCallback onToggleFollow;
 
   @override
-  State<_ActionButton> createState() => _ActionButtonState();
+  State<_AvatarWithFollow> createState() => _AvatarWithFollowState();
 }
 
-class _ActionButtonState extends State<_ActionButton>
+class _AvatarWithFollowState extends State<_AvatarWithFollow>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
-  late Animation<double> _scale;
+  late final AnimationController _controller;
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: durationLike,
-    );
-    _scale = TweenSequence<double>([
-      TweenSequenceItem(
-          tween: Tween(begin: 1.0, end: 1.35)
-              .chain(CurveTween(curve: Curves.easeOut)),
-          weight: 50),
-      TweenSequenceItem(
-          tween: Tween(begin: 1.35, end: 1.0)
-              .chain(CurveTween(curve: Curves.elasticOut)),
-          weight: 50),
-    ]).animate(_ctrl);
+    _controller = AnimationController(vsync: this, duration: durationSlow);
+  }
+
+  @override
+  void didUpdateWidget(covariant _AvatarWithFollow oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.following && widget.following) {
+      _controller.forward(from: 0);
+    }
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _controller.dispose();
     super.dispose();
-  }
-
-  void _handleTap() {
-    if (widget.animated) _ctrl.forward(from: 0);
-    widget.onTap();
   }
 
   @override
   Widget build(BuildContext context) {
-    final iconWidget = Icon(widget.icon, color: widget.iconColor, size: 30);
-
-    return GestureDetector(
-      onTap: _handleTap,
-      child: Column(
+    return SizedBox(
+      width: 56,
+      height: 64,
+      child: Stack(
+        clipBehavior: Clip.none,
+        alignment: Alignment.topCenter,
         children: [
-          if (widget.animated)
-            ScaleTransition(
-              scale: _scale,
-              child: widget.iconMirror
-                  ? Transform(
-                      alignment: Alignment.center,
-                      transform: Matrix4.rotationY(3.1416),
-                      child: iconWidget,
-                    )
-                  : iconWidget,
-            )
-          else
-            widget.iconMirror
-                ? Transform(
-                    alignment: Alignment.center,
-                    transform: Matrix4.rotationY(3.1416),
-                    child: iconWidget,
+          ReelAvatar(
+            url: widget.item.authorAvatar,
+            name: widget.item.authorUsername,
+            size: 50,
+            borderColor: colorTextPrimary,
+            borderWidth: 1.5,
+            showVerified: widget.item.authorVerified,
+            onTap: () => showReelToast(
+              context,
+              'Profil de ${widget.item.authorUsername}',
+              icon: ReelGlyph.profile,
+            ),
+          ),
+          Positioned(
+            bottom: 0,
+            child: widget.following
+                ? ScaleTransition(
+                    scale: CurvedAnimation(
+                      parent: _controller,
+                      curve: Curves.easeOutBack,
+                    ),
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: const BoxDecoration(
+                        color: colorBgElevated,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: ReelIcon(
+                          ReelGlyph.check,
+                          size: 12,
+                          color: colorTextSecondary,
+                        ),
+                      ),
+                    ),
                   )
-                : iconWidget,
-          const SizedBox(height: 3),
-          Text(
-            widget.label,
-            style: const TextStyle(
-              color: colorTextPrimary,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
+                : Pressable(
+                    scale: 0.85,
+                    onTap: widget.onToggleFollow,
+                    semanticLabel: 'Suivre ${widget.item.authorUsername}',
+                    child: Container(
+                      width: 22,
+                      height: 22,
+                      decoration: const BoxDecoration(
+                        color: colorBrand,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Center(
+                        child: ReelIcon(
+                          ReelGlyph.plus,
+                          size: 12,
+                          color: Colors.white,
+                          strokeWidth: 3.4,
+                        ),
+                      ),
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _SidebarAction extends StatefulWidget {
+  const _SidebarAction({
+    required this.glyph,
+    required this.label,
+    required this.onTap,
+    this.active = false,
+    this.activeColor = colorLike,
+    this.semanticLabel,
+  });
+
+  final ReelGlyph glyph;
+  final String label;
+  final VoidCallback onTap;
+  final bool active;
+  final Color activeColor;
+  final String? semanticLabel;
+
+  @override
+  State<_SidebarAction> createState() => _SidebarActionState();
+}
+
+class _SidebarActionState extends State<_SidebarAction>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller;
+  late final Animation<double> _scale;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: durationLike);
+    _scale = TweenSequence<double>([
+      TweenSequenceItem(
+        tween: Tween(begin: 1.0, end: 1.32)
+            .chain(CurveTween(curve: Curves.easeOut)),
+        weight: 45,
+      ),
+      TweenSequenceItem(
+        tween: Tween(begin: 1.32, end: 1.0)
+            .chain(CurveTween(curve: Curves.elasticOut)),
+        weight: 55,
+      ),
+    ]).animate(_controller);
+  }
+
+  @override
+  void didUpdateWidget(covariant _SidebarAction oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final color = widget.active ? widget.activeColor : colorTextPrimary;
+    return Pressable(
+      scale: 0.9,
+      haptic: HapticKind.none,
+      onTap: widget.onTap,
+      semanticLabel: widget.semanticLabel ?? widget.label,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          ScaleTransition(
+            scale: _scale,
+            child: ReelIcon(
+              widget.glyph,
+              size: 32,
+              color: color,
+              filled: widget.active,
+            ),
+          ),
+          const SizedBox(height: space4),
+          AnimatedSwitcher(
+            duration: durationFast,
+            transitionBuilder: (child, animation) => FadeTransition(
+              opacity: animation,
+              child: SlideTransition(
+                position: Tween<Offset>(
+                  begin: const Offset(0, 0.4),
+                  end: Offset.zero,
+                ).animate(animation),
+                child: child,
+              ),
+            ),
+            child: Text(
+              widget.label,
+              key: ValueKey(widget.label),
+              style: AppTokens.labelM.copyWith(
+                color: colorTextPrimary,
+                fontWeight: FontWeight.w600,
+                shadows: AppTokens.feedTextShadow,
+              ),
             ),
           ),
         ],
@@ -238,12 +324,11 @@ class _ActionButtonState extends State<_ActionButton>
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Disque tournant (son)
-// ─────────────────────────────────────────────────────────────────────────────
 class _SpinningDisc extends StatefulWidget {
-  const _SpinningDisc({required this.avatarUrl});
-  final String avatarUrl;
+  const _SpinningDisc({required this.item, required this.spinning});
+
+  final FeedItem item;
+  final bool spinning;
 
   @override
   State<_SpinningDisc> createState() => _SpinningDiscState();
@@ -251,43 +336,90 @@ class _SpinningDisc extends StatefulWidget {
 
 class _SpinningDiscState extends State<_SpinningDisc>
     with SingleTickerProviderStateMixin {
-  late AnimationController _ctrl;
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(seconds: 8),
+  );
 
   @override
   void initState() {
     super.initState();
-    _ctrl = AnimationController(
-      vsync: this,
-      duration: const Duration(seconds: 6),
-    )..repeat();
+    if (widget.spinning) _controller.repeat();
+  }
+
+  @override
+  void didUpdateWidget(covariant _SpinningDisc oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (widget.spinning && !_controller.isAnimating) {
+      _controller.repeat();
+    } else if (!widget.spinning && _controller.isAnimating) {
+      _controller.stop();
+    }
   }
 
   @override
   void dispose() {
-    _ctrl.dispose();
+    _controller.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    return RotationTransition(
-      turns: _ctrl,
-      child: Container(
-        width: 44,
-        height: 44,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          border: Border.all(color: const Color(0xFF444444), width: 8),
-          color: Colors.black,
-        ),
-        child: ClipOval(
-          child: CachedNetworkImage(
-            imageUrl: widget.avatarUrl,
-            fit: BoxFit.cover,
-            placeholder: (_, __) => Container(color: const Color(0xFF333333)),
-            errorWidget: (_, __, ___) => const Icon(Icons.music_note_rounded,
-                color: colorTextSecondary, size: 16),
-          ),
+    return Pressable(
+      scale: 0.9,
+      onTap: () => showReelToast(
+        context,
+        widget.item.soundName,
+        icon: ReelGlyph.music,
+      ),
+      semanticLabel: 'Son : ${widget.item.soundName}',
+      child: SizedBox(
+        width: 46,
+        height: 46,
+        child: Stack(
+          alignment: Alignment.center,
+          children: [
+            RotationTransition(
+              turns: _controller,
+              child: Container(
+                width: 46,
+                height: 46,
+                decoration: const BoxDecoration(
+                  shape: BoxShape.circle,
+                  gradient: LinearGradient(
+                    begin: Alignment.topLeft,
+                    end: Alignment.bottomRight,
+                    colors: [Color(0xFF2A2A2E), Color(0xFF0A0A0B)],
+                  ),
+                  border: Border.fromBorderSide(
+                    BorderSide(color: Color(0xFF3A3A3E), width: 6),
+                  ),
+                ),
+                child: ClipOval(
+                  child: ReelAvatar(
+                    url: widget.item.authorAvatar,
+                    name: widget.item.authorUsername,
+                    size: 34,
+                  ),
+                ),
+              ),
+            ),
+            Container(
+              width: 30,
+              height: 30,
+              decoration: BoxDecoration(
+                color: Colors.black.withValues(alpha: 0.55),
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: ReelIcon(
+                  ReelGlyph.music,
+                  size: 15,
+                  color: Colors.white,
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

@@ -1,67 +1,285 @@
 import 'package:flutter/material.dart';
-import '../../core/theme/tokens.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
-class FriendsScreen extends StatelessWidget {
+import '../../core/icons/reel_icons.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/utils/formatters.dart';
+import '../../core/widgets/follow_button.dart';
+import '../../core/widgets/pressable.dart';
+import '../../core/widgets/reel_avatar.dart';
+import '../../core/widgets/reel_bottom_nav.dart';
+import '../feed/models/feed_item.dart';
+import '../feed/providers/engagement_provider.dart';
+import '../feed/providers/feed_provider.dart';
+import '../feed/widgets/create_sheet.dart';
+import '../feed/widgets/item_sheet.dart';
+
+class _Creator {
+  const _Creator({
+    required this.username,
+    required this.avatar,
+    required this.verified,
+    required this.videos,
+    required this.item,
+  });
+
+  final String username;
+  final String avatar;
+  final bool verified;
+  final List<FeedItem> videos;
+  final FeedItem item;
+}
+
+class _FriendsTabNotifier extends Notifier<int> {
+  @override
+  int build() => 0;
+
+  void select(int index) => state = index;
+}
+
+final _friendsTabProvider =
+    NotifierProvider<_FriendsTabNotifier, int>(_FriendsTabNotifier.new);
+
+class FriendsScreen extends ConsumerStatefulWidget {
   const FriendsScreen({super.key});
 
   @override
+  ConsumerState<FriendsScreen> createState() => _FriendsScreenState();
+}
+
+class _FriendsScreenState extends ConsumerState<FriendsScreen> {
+  final _searchController = TextEditingController();
+  String _filter = '';
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final tab = ref.watch(_friendsTabProvider);
+    final engagement = ref.watch(engagementProvider);
+    final items = ref.watch(feedItemsProvider).asData?.value ?? const [];
+
+    final byAuthor = <String, List<FeedItem>>{};
+    for (final item in items) {
+      byAuthor.putIfAbsent(item.authorUsername, () => []).add(item);
+    }
+    final creators = byAuthor.entries
+        .map(
+          (entry) => _Creator(
+            username: entry.key,
+            avatar: entry.value.first.authorAvatar,
+            verified: entry.value.any((v) => v.authorVerified),
+            videos: entry.value,
+            item: entry.value.first,
+          ),
+        )
+        .where(
+          (creator) =>
+              _filter.isEmpty ||
+              creator.username.toLowerCase().contains(_filter.toLowerCase()),
+        )
+        .toList(growable: false);
+
+    final followed =
+        creators.where((c) => engagement.isFollowing(c.username)).toList();
+    final suggestions =
+        creators.where((c) => !engagement.isFollowing(c.username)).toList();
+    final visible = tab == 0 ? suggestions : followed;
+
     return Scaffold(
       backgroundColor: colorBgBase,
-      appBar: AppBar(
-        backgroundColor: colorBgBase,
-        foregroundColor: colorTextPrimary,
-        elevation: 0,
-        centerTitle: true,
-        iconTheme: const IconThemeData(color: colorTextPrimary),
-        title: const Text(
-          'Amis',
-          style: TextStyle(
-            color: colorTextPrimary,
-            fontWeight: FontWeight.w700,
-            fontSize: 16,
-          ),
-        ),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.person_add_rounded, color: colorTextPrimary),
-            tooltip: 'Ajouter un ami',
-            onPressed: () {},
-          ),
-        ],
-      ),
-
-      body: DefaultTabController(
-        length: 2,
+      body: SafeArea(
+        bottom: false,
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ── Tabs ──────────────────────────────────────────────────────
-            const TabBar(
-              indicatorColor: colorBrand,
-              indicatorWeight: 2,
-              labelColor: colorTextPrimary,
-              unselectedLabelColor: colorTextSecondary,
-              labelStyle: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w600,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(gutter, space8, gutter, 0),
+              child: Text(
+                'Amis',
+                style: AppTokens.titleM.copyWith(color: colorTextPrimary),
               ),
-              unselectedLabelStyle: TextStyle(
-                fontSize: 14, fontWeight: FontWeight.w400,
-              ),
-              tabs: [
-                Tab(text: 'Suggérés'),
-                Tab(text: 'Abonnements'),
-              ],
             ),
-            const Divider(color: colorDivider, height: 1),
-
-            // ── Contenu ───────────────────────────────────────────────────
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(gutter, space12, gutter, space8),
+              child: Container(
+                height: 40,
+                decoration: BoxDecoration(
+                  color: colorBgCard,
+                  borderRadius: BorderRadius.circular(radiusPill),
+                ),
+                child: Row(
+                  children: [
+                    const SizedBox(width: space12),
+                    const ReelIcon(
+                      ReelGlyph.search,
+                      size: 18,
+                      color: colorTextSecondaryDark,
+                    ),
+                    const SizedBox(width: space8),
+                    Expanded(
+                      child: TextField(
+                        controller: _searchController,
+                        onChanged: (value) => setState(() => _filter = value),
+                        style: AppTokens.bodyS.copyWith(
+                          color: colorTextPrimary,
+                          fontSize: 14,
+                        ),
+                        decoration: InputDecoration(
+                          hintText: 'Rechercher un créateur',
+                          hintStyle: AppTokens.bodyS.copyWith(
+                            color: colorTextSecondaryDark,
+                            fontSize: 14,
+                          ),
+                          filled: false,
+                          isDense: true,
+                          border: InputBorder.none,
+                          enabledBorder: InputBorder.none,
+                          focusedBorder: InputBorder.none,
+                          contentPadding: EdgeInsets.zero,
+                        ),
+                      ),
+                    ),
+                    if (_filter.isNotEmpty)
+                      Pressable(
+                        scale: 0.85,
+                        onTap: () {
+                          _searchController.clear();
+                          setState(() => _filter = '');
+                        },
+                        child: const Padding(
+                          padding: EdgeInsets.symmetric(horizontal: space8),
+                          child: ReelIcon(
+                            ReelGlyph.close,
+                            size: 14,
+                            color: colorTextSecondaryDark,
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding:
+                  const EdgeInsets.fromLTRB(gutter, space4, gutter, space12),
+              child: _SegmentedTabs(
+                selected: tab,
+                labels: [
+                  'Suggestions (${suggestions.length})',
+                  'Abonnements (${followed.length})',
+                ],
+                onSelect: (index) =>
+                    ref.read(_friendsTabProvider.notifier).select(index),
+              ),
+            ),
             Expanded(
-              child: TabBarView(
+              child: visible.isEmpty
+                  ? _FriendsEmpty(tab: tab)
+                  : ListView.separated(
+                      padding: const EdgeInsets.only(bottom: space32),
+                      itemCount: visible.length,
+                      separatorBuilder: (_, __) =>
+                          const Divider(height: 0.5, indent: 76),
+                      itemBuilder: (context, index) {
+                        final creator = visible[index];
+                        return _CreatorTile(
+                          creator: creator,
+                          following: engagement.isFollowing(creator.username),
+                          onOpen: () =>
+                              showItemSheet(context, item: creator.item),
+                          onToggleFollow: () {
+                            ref
+                                .read(engagementProvider.notifier)
+                                .toggleFollow(creator.username);
+                          },
+                        );
+                      },
+                    ),
+            ),
+          ],
+        ),
+      ),
+      bottomNavigationBar: ReelBottomNav(
+        currentIndex: 1,
+        onSelect: (index) {
+          switch (index) {
+            case 0:
+              context.go('/');
+            case 3:
+              context.go('/inbox');
+            case 4:
+              context.go('/profile');
+          }
+        },
+        onCreate: () => showCreateSheet(context),
+      ),
+    );
+  }
+}
+
+class _CreatorTile extends StatelessWidget {
+  const _CreatorTile({
+    required this.creator,
+    required this.following,
+    required this.onOpen,
+    required this.onToggleFollow,
+  });
+
+  final _Creator creator;
+  final bool following;
+  final VoidCallback onOpen;
+  final VoidCallback onToggleFollow;
+
+  @override
+  Widget build(BuildContext context) {
+    final views = creator.videos.fold<int>(0, (sum, item) => sum + item.likes);
+    return InkWell(
+      onTap: onOpen,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: gutter,
+          vertical: space10,
+        ),
+        child: Row(
+          children: [
+            ReelAvatar(
+              url: creator.avatar,
+              name: creator.username,
+              size: 48,
+              showVerified: creator.verified,
+            ),
+            const SizedBox(width: space12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _SuggestedList(),
-                  _FollowingList(),
+                  Text(
+                    creator.username,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+                  ),
+                  const SizedBox(height: 2),
+                  Text(
+                    '${countLabel(creator.videos.length, 'vidéo')} · ${formatCount(views)} j\'aime',
+                    style: AppTokens.labelS.copyWith(
+                      color: colorTextSecondaryDark,
+                    ),
+                  ),
                 ],
               ),
+            ),
+            FollowButton(
+              compact: true,
+              initialFollowing: following,
+              onChanged: (_) => onToggleFollow(),
             ),
           ],
         ),
@@ -70,148 +288,109 @@ class FriendsScreen extends StatelessWidget {
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Liste suggestions (placeholder)
-// ─────────────────────────────────────────────────────────────────────────────
-class _SuggestedList extends StatelessWidget {
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.symmetric(vertical: 8),
-      children: List.generate(8, (i) => _FriendTile(index: i)),
-    );
-  }
-}
+class _SegmentedTabs extends StatelessWidget {
+  const _SegmentedTabs({
+    required this.selected,
+    required this.labels,
+    required this.onSelect,
+  });
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Liste abonnements (placeholder vide)
-// ─────────────────────────────────────────────────────────────────────────────
-class _FollowingList extends StatelessWidget {
+  final int selected;
+  final List<String> labels;
+  final ValueChanged<int> onSelect;
+
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: const [
-          Icon(Icons.group_outlined, size: 52, color: colorTextSecondary),
-          SizedBox(height: 16),
-          Text(
-            'Aucun abonnement',
-            style: TextStyle(
-              color: colorTextPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w600,
+    return Container(
+      height: 38,
+      padding: const EdgeInsets.all(3),
+      decoration: BoxDecoration(
+        color: colorBgCard,
+        borderRadius: BorderRadius.circular(radiusPill),
+      ),
+      child: Row(
+        children: [
+          for (var i = 0; i < labels.length; i++)
+            Expanded(
+              child: GestureDetector(
+                onTap: () => onSelect(i),
+                behavior: HitTestBehavior.opaque,
+                child: AnimatedContainer(
+                  duration: durationNormal,
+                  curve: ReelCurves.emphasized,
+                  decoration: BoxDecoration(
+                    color: selected == i
+                        ? colorBgElevated
+                        : Colors.transparent,
+                    borderRadius: BorderRadius.circular(radiusPill),
+                  ),
+                  child: Center(
+                    child: Text(
+                      labels[i],
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTokens.labelM.copyWith(
+                        color: selected == i
+                            ? colorTextPrimary
+                            : colorTextSecondaryDark,
+                        fontWeight: selected == i
+                            ? FontWeight.w700
+                            : FontWeight.w500,
+                      ),
+                    ),
+                  ),
+                ),
+              ),
             ),
-          ),
-          SizedBox(height: 8),
-          Text(
-            'Les comptes que tu suis apparaîtront ici.',
-            style: TextStyle(color: colorTextSecondary, fontSize: 13),
-            textAlign: TextAlign.center,
-          ),
         ],
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tile utilisateur
-// ─────────────────────────────────────────────────────────────────────────────
-class _FriendTile extends StatefulWidget {
-  const _FriendTile({required this.index});
-  final int index;
+class _FriendsEmpty extends StatelessWidget {
+  const _FriendsEmpty({required this.tab});
 
-  @override
-  State<_FriendTile> createState() => _FriendTileState();
-}
-
-class _FriendTileState extends State<_FriendTile> {
-  bool _following = false;
-
-  static const _names = [
-    'alice_media', 'bob_streams', 'celeste_v', 'dan_reel',
-    'eva_content', 'fox_studio', 'grace_watch', 'hiro_film',
-  ];
-  static const _followers = [
-    '12,4K', '8,1K', '245K', '3,2K',
-    '89,5K', '1,2M', '45,3K', '678K',
-  ];
+  final int tab;
 
   @override
   Widget build(BuildContext context) {
-    final name = _names[widget.index % _names.length];
-    final followers = _followers[widget.index % _followers.length];
-
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-      child: Row(
-        children: [
-          // Avatar
-          Container(
-            width: 50, height: 50,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: colorBgCard,
-              border: Border.all(color: colorDivider),
-            ),
-            child: Center(
-              child: Text(
-                name[0].toUpperCase(),
-                style: const TextStyle(
-                  color: colorTextPrimary,
-                  fontSize: 18,
-                  fontWeight: FontWeight.w700,
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(space32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: colorBgCard,
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: ReelIcon(
+                  ReelGlyph.friends,
+                  size: 26,
+                  color: colorTextSecondaryDark,
                 ),
               ),
             ),
-          ),
-          const SizedBox(width: 12),
-
-          // Nom + stats
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text('@$name',
-                    style: const TextStyle(
-                      color: colorTextPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                    )),
-                const SizedBox(height: 2),
-                Text('$followers abonnés',
-                    style: const TextStyle(
-                      color: colorTextSecondary, fontSize: 12,
-                    )),
-              ],
+            const SizedBox(height: space16),
+            Text(
+              tab == 0 ? 'Aucune suggestion' : 'Aucun abonnement',
+              style: AppTokens.titleS.copyWith(color: colorTextPrimary),
             ),
-          ),
-
-          // Bouton follow
-          GestureDetector(
-            onTap: () => setState(() => _following = !_following),
-            child: AnimatedContainer(
-              duration: durationNormal,
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 7),
-              decoration: BoxDecoration(
-                color: _following ? Colors.transparent : colorBrand,
-                border: Border.all(
-                  color: _following ? colorTextSecondary : colorBrand,
-                ),
-                borderRadius: BorderRadius.circular(4),
-              ),
-              child: Text(
-                _following ? 'Abonné' : 'S\'abonner',
-                style: TextStyle(
-                  color: _following ? colorTextSecondary : colorTextPrimary,
-                  fontSize: 13,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
+            const SizedBox(height: space6),
+            Text(
+              tab == 0
+                  ? 'Les créateurs du feed apparaissent ici.'
+                  : 'Suis un créateur depuis le feed pour le retrouver ici.',
+              textAlign: TextAlign.center,
+              style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }

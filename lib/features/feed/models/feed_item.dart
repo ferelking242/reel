@@ -1,3 +1,6 @@
+import '../../../core/utils/formatters.dart';
+
+/// One video of the vertical feed.
 class FeedItem {
   const FeedItem({
     required this.id,
@@ -13,6 +16,9 @@ class FeedItem {
     required this.hashtags,
     required this.soundName,
     this.isFollowing = false,
+    this.authorVerified = false,
+    this.createdAt,
+    this.isDemo = false,
   });
 
   final String id;
@@ -28,15 +34,41 @@ class FeedItem {
   final List<String> hashtags;
   final String soundName;
   final bool isFollowing;
+  final bool authorVerified;
+  final DateTime? createdAt;
 
-  String get formattedLikes => _format(likes);
-  String get formattedComments => _format(comments);
-  String get formattedShares => _format(shares);
-  String get formattedBookmarks => _format(bookmarks);
+  /// Demo items use generated posters and never hit the network.
+  final bool isDemo;
 
-  static String _format(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(1)}K';
-    return '$n';
+  bool get hasVideo => videoUrl.isNotEmpty;
+
+  String get formattedLikes => formatCount(likes);
+  String get formattedComments => formatCount(comments);
+  String get formattedShares => formatCount(shares);
+  String get formattedBookmarks => formatCount(bookmarks);
+
+  FeedItem copyWith({
+    String? videoUrl,
+    String? thumbnailUrl,
+    bool? isFollowing,
+  }) {
+    return FeedItem(
+      id: id,
+      videoUrl: videoUrl ?? this.videoUrl,
+      thumbnailUrl: thumbnailUrl ?? this.thumbnailUrl,
+      title: title,
+      authorUsername: authorUsername,
+      authorAvatar: authorAvatar,
+      likes: likes,
+      comments: comments,
+      shares: shares,
+      bookmarks: bookmarks,
+      hashtags: hashtags,
+      soundName: soundName,
+      isFollowing: isFollowing ?? this.isFollowing,
+      authorVerified: authorVerified,
+      createdAt: createdAt,
+      isDemo: isDemo,
+    );
   }
 }

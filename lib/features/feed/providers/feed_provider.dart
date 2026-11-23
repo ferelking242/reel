@@ -1,16 +1,32 @@
-import 'dart:convert';
 import 'dart:math';
+
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../models/feed_item.dart';
+
 import '../../../remote/remote_client.dart';
 import '../../../remote/remote_config_provider.dart';
 import '../../../utils/log/app_file_logger.dart';
+import '../demo_feed.dart';
+import '../feed_mapping.dart';
+import '../models/feed_item.dart';
 
 const _tag = 'FeedProvider';
 
+/// Error surfaced to the feed UI. [details] keeps the raw server message so the
+/// user can expand it when troubleshooting.
+class FeedException implements Exception {
+  const FeedException(this.message, {this.details});
+
+  final String message;
+  final String? details;
+
+  @override
+  String toString() => details == null ? message : '$message\n$details';
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Index de la page active (Riverpod 3.x : Notifier au lieu de StateProvider)
+// Simple state holders
 // ─────────────────────────────────────────────────────────────────────────────
+
 class _CurrentFeedIndexNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -19,11 +35,10 @@ class _CurrentFeedIndexNotifier extends Notifier<int> {
 
 final currentFeedIndexProvider =
     NotifierProvider<_CurrentFeedIndexNotifier, int>(
-        _CurrentFeedIndexNotifier.new);
+  _CurrentFeedIndexNotifier.new,
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Tab actif : 0 = "Pour toi", 1 = "Suivis"
-// ─────────────────────────────────────────────────────────────────────────────
+/// 0 = « Pour toi », 1 = « Suivis ».
 class _FeedTabNotifier extends Notifier<int> {
   @override
   int build() => 0;
@@ -33,9 +48,6 @@ class _FeedTabNotifier extends Notifier<int> {
 final feedTabProvider =
     NotifierProvider<_FeedTabNotifier, int>(_FeedTabNotifier.new);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Statut de connexion serveur
-// ─────────────────────────────────────────────────────────────────────────────
 class _ServerStatusNotifier extends Notifier<String?> {
   @override
   String? build() => null;
@@ -44,11 +56,9 @@ class _ServerStatusNotifier extends Notifier<String?> {
 
 final serverStatusProvider =
     NotifierProvider<_ServerStatusNotifier, String?>(
-        _ServerStatusNotifier.new);
+  _ServerStatusNotifier.new,
+);
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Indicateur "chargement de plus" (pour afficher un spinner en bas du feed)
-// ─────────────────────────────────────────────────────────────────────────────
 class _LoadingMoreNotifier extends Notifier<bool> {
   @override
   bool build() => false;
@@ -58,235 +68,310 @@ class _LoadingMoreNotifier extends Notifier<bool> {
 final loadingMoreProvider =
     NotifierProvider<_LoadingMoreNotifier, bool>(_LoadingMoreNotifier.new);
 
+/// When true the feed shows a local demo so the UI can be explored without a
+/// Watchtower server.
+class _DemoModeNotifier extends Notifier<bool> {
+  @override
+  bool build() => false;
+  void enable() => state = true;
+  void disable() => state = false;
+}
+
+final demoModeProvider =
+    NotifierProvider<_DemoModeNotifier, bool>(_DemoModeNotifier.new);
+
 // ─────────────────────────────────────────────────────────────────────────────
-// Feed items — avec pagination infinie
+// Feed items
 // ─────────────────────────────────────────────────────────────────────────────
+
 final feedItemsProvider =
     AsyncNotifierProvider<FeedNotifier, List<FeedItem>>(FeedNotifier.new);
 
 class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
-  // État de pagination — réinitialisé à chaque build()
+  static const int itemsPerPage = 8;
+  static const int _maxSourcesToTry = 4;
+
   int _page = 1;
   bool _hasMore = true;
   bool _isLoadingMore = false;
-  String _resolvedSourceId = '';
-  String _resolvedSourceName = '';
+  String _sourceId = '';
+  String _sourceName = '';
   RemoteApiClient? _client;
 
   @override
   Future<List<FeedItem>> build() async {
-    // Réinitialise la pagination à chaque rebuild (changement de config)
-    _page = 1;
-    _hasMore = true;
-    _isLoadingMore = false;
-    _resolvedSourceId = '';
-    _resolvedSourceName = '';
-    _client = null;
+    _reset();
+
+    if (ref.watch(demoModeProvider)) {
+      _scheduleStatus('Mode démo — contenu local');
+      return demoFeedItems;
+    }
 
     final client = ref.watch(remoteClientProvider);
-
     if (client == null) {
-      logger.log(_tag, 'Pas de client configuré → liste vide');
-      ref.read(serverStatusProvider.notifier).update(
-          'Aucun serveur configuré — configure un serveur pour voir du contenu');
-      return [];
+      // First run: show the local demo so the interface is never empty.
+      _scheduleStatus('Aucun serveur configuré — mode démo');
+      Future.microtask(() {
+        if (!ref.mounted) return;
+        if (!ref.read(demoModeProvider)) {
+          ref.read(demoModeProvider.notifier).enable();
+        }
+      });
+      return demoFeedItems;
     }
-
-    logger.log(_tag, 'Client configuré (${client.baseUrl}) → chargement réel');
-    ref.read(serverStatusProvider.notifier).update(null);
 
     final config = await ref.read(remoteConfigProvider.future);
-    return _loadPage(client, config.selectedSourceId, page: 1);
-  }
-
-  // ── Charge une page et résout les vidéos ──────────────────────────────────
-  Future<List<FeedItem>> _loadPage(
-    RemoteApiClient client,
-    String sourceId, {
-    required int page,
-  }) async {
-    logger.log(_tag, 'Chargement page $page pour source $sourceId');
-
-    // Résolution du sourceId (une seule fois, on garde le résultat)
-    if (_resolvedSourceId.isEmpty) {
-      await _resolveSource(client, sourceId);
-    }
-
-    final List<dynamic> rawItems =
-        await _fetchItems(client, _resolvedSourceId, page: page);
-    logger.log(_tag, '${rawItems.length} items bruts reçus (page $page)');
-
-    if (rawItems.isEmpty) {
-      if (page == 1) {
-        throw Exception(
-            'La source "$_resolvedSourceName" ne retourne aucun contenu');
-      }
-      _hasMore = false;
-      return [];
-    }
-
-    const maxItemsPerPage = 8;
-    final toResolve = rawItems.take(maxItemsPerPage).toList();
-
-    final items = <FeedItem>[];
-    final baseIndex = (page - 1) * maxItemsPerPage;
-    for (var i = 0; i < toResolve.length; i++) {
-      final raw = toResolve[i] as Map<String, dynamic>;
-      final link = raw['link'] as String? ?? raw['url'] as String? ?? '';
-
-      String? videoUrl = _tryExtractVideoFromLink(link);
-      if (videoUrl == null && link.isNotEmpty) {
-        videoUrl =
-            await _resolveVideoUrl(client, _resolvedSourceId, link) ?? '';
-      }
-      if (videoUrl == null || videoUrl.isEmpty) continue;
-
-      items.add(_toFeedItem(raw, _resolvedSourceName, videoUrl, baseIndex + i));
-    }
-
-    logger.log(_tag,
-        '${items.length} items avec vidéo résolue (page $page)');
-
-    // Si la page a retourné moins d'items que le max → plus de pages
-    if (rawItems.length < maxItemsPerPage) {
-      _hasMore = false;
-    }
-
-    if (page == 1) {
-      if (items.isEmpty) {
-        throw Exception(
-            'Aucune vidéo jouable trouvée pour "$_resolvedSourceName"');
-      }
-      ref.read(serverStatusProvider.notifier).update(
-          '✓ Connecté à "$_resolvedSourceName" — ${items.length} vidéos');
-    }
-
+    final items = await _loadFirstPage(client, config.selectedSourceId);
     return items;
   }
 
-  // ── Résout l'ID de source (match par id ou name, fallback première) ───────
-  Future<void> _resolveSource(
-      RemoteApiClient client, String sourceId) async {
-    String resolved = sourceId;
-    String name = sourceId;
-
-    try {
-      final sources =
-          await client.sources().timeout(const Duration(seconds: 15));
-      logger.log(_tag, '${sources.length} sources reçues');
-      if (sources.isNotEmpty) {
-        final match = sources.cast<Map<String, dynamic>>().where((s) {
-          return s['id']?.toString() == sourceId ||
-              s['name']?.toString() == sourceId;
-        }).firstOrNull;
-
-        if (match != null) {
-          resolved = match['id']?.toString() ?? sourceId;
-          name = match['name'] as String? ?? resolved;
-        } else {
-          final first = sources.cast<Map<String, dynamic>>().first;
-          resolved = first['id']?.toString() ?? sourceId;
-          name = first['name'] as String? ?? resolved;
-        }
-      }
-    } catch (e) {
-      logger.log(_tag, 'Impossible de lister les sources: $e');
-    }
-
-    _resolvedSourceId = resolved;
-    _resolvedSourceName = name;
+  /// Riverpod forbids mutating other providers while this one builds, so the
+  /// status line is published on the next frame.
+  void _scheduleStatus(String? message) {
+    Future.microtask(() {
+      if (!ref.mounted) return;
+      ref.read(serverStatusProvider.notifier).update(message);
+    });
   }
 
-  // ── loadMore : appelé par le feed quand l'index approche de la fin ────────
+  void _reset() {
+    _page = 1;
+    _hasMore = true;
+    _isLoadingMore = false;
+    _sourceId = '';
+    _sourceName = '';
+    _client = null;
+  }
+
+  /// Tries the selected source first, then falls back to the other sources
+  /// exposed by the server so a single broken provider does not empty the feed.
+  Future<List<FeedItem>> _loadFirstPage(
+    RemoteApiClient client,
+    String preferredSourceId,
+  ) async {
+    final candidates = await _candidateSources(client, preferredSourceId);
+    if (candidates.isEmpty) {
+      throw const FeedException(
+        'Le serveur ne liste aucune source de contenu.',
+        details: 'GET /api/sources a renvoyé une liste vide.',
+      );
+    }
+
+    final failures = <String>[];
+    for (final candidate in candidates.take(_maxSourcesToTry)) {
+      try {
+        final items = await _fetchPage(
+          client,
+          candidate.id,
+          page: 1,
+          resolveVideos: true,
+        );
+        if (items.isEmpty) {
+          failures.add('${candidate.name}: aucune vidéo jouable');
+          continue;
+        }
+
+        _client = client;
+        _sourceId = candidate.id;
+        _sourceName = candidate.name;
+        _hasMore = items.length >= itemsPerPage;
+
+        final fellBack = preferredSourceId.isNotEmpty &&
+            candidate.id != preferredSourceId;
+        ref.read(serverStatusProvider.notifier).update(
+              fellBack
+                  ? 'Source précédente indisponible — lecture de « ${candidate.name} »'
+                  : '✓ ${candidate.name} — ${items.length} vidéos',
+            );
+        return items;
+      } catch (error) {
+        failures.add('${candidate.name}: ${_shortError(error)}');
+        logger.error(_tag, 'Source ${candidate.id} en échec: $error');
+      }
+    }
+
+    throw FeedException(
+      'Aucune source ne renvoie de vidéo lisible.',
+      details: failures.join('\n'),
+    );
+  }
+
+  Future<List<({String id, String name})>> _candidateSources(
+    RemoteApiClient client,
+    String preferredSourceId,
+  ) async {
+    try {
+      final raw = await client.sources().timeout(const Duration(seconds: 15));
+      final all = raw
+          .cast<Map<String, dynamic>>()
+          .map((s) => (
+                id: s['id']?.toString() ?? '',
+                name: s['name']?.toString() ?? s['id']?.toString() ?? '',
+              ))
+          .where((s) => s.id.isNotEmpty)
+          .toList();
+
+      if (all.isEmpty) return const [];
+
+      final preferred = all.where(
+        (s) => s.id == preferredSourceId || s.name == preferredSourceId,
+      );
+      final rest = all.where(
+        (s) => s.id != preferredSourceId && s.name != preferredSourceId,
+      );
+      return [...preferred, ...rest];
+    } catch (error) {
+      logger.log(_tag, 'Impossible de lister les sources: $error');
+      if (preferredSourceId.isEmpty) return const [];
+      return [(id: preferredSourceId, name: preferredSourceId)];
+    }
+  }
+
+  /// Fetches one page for [sourceId], resolving playable URLs when needed.
+  Future<List<FeedItem>> _fetchPage(
+    RemoteApiClient client,
+    String sourceId, {
+    required int page,
+    required bool resolveVideos,
+  }) async {
+    final rawItems = await _fetchRawItems(client, sourceId, page: page);
+    if (rawItems.isEmpty) return const [];
+
+    final slice = rawItems.take(itemsPerPage).toList(growable: false);
+    final baseIndex = (page - 1) * itemsPerPage;
+
+    if (!resolveVideos) {
+      return [
+        for (var i = 0; i < slice.length; i++)
+          feedItemFromRaw(
+            slice[i],
+            sourceName: _sourceName,
+            index: baseIndex + i,
+          ),
+      ];
+    }
+
+    // Resolve in small batches: a 20s timeout per item would stall the feed.
+    final resolved = List<FeedItem?>.filled(slice.length, null);
+    const batchSize = 4;
+    for (var start = 0; start < slice.length; start += batchSize) {
+      final end = min(start + batchSize, slice.length);
+      await Future.wait([
+        for (var i = start; i < end; i++)
+          _resolveItem(client, sourceId, slice[i], baseIndex + i).then(
+            (item) => resolved[i] = item,
+            onError: (_) => resolved[i] = null,
+          ),
+      ]);
+    }
+
+    return resolved.whereType<FeedItem>().toList(growable: false);
+  }
+
+  Future<FeedItem?> _resolveItem(
+    RemoteApiClient client,
+    String sourceId,
+    Map<String, dynamic> raw,
+    int index,
+  ) async {
+    final link = raw['link'] as String? ?? raw['url'] as String? ?? '';
+    var videoUrl = videoUrlFromLink(link);
+    if (videoUrl == null && link.isNotEmpty) {
+      videoUrl = await _resolveVideoUrl(client, sourceId, link);
+    }
+    if (videoUrl == null || videoUrl.isEmpty) return null;
+    return feedItemFromRaw(
+      raw,
+      sourceName: _sourceName,
+      videoUrl: videoUrl,
+      index: index,
+    );
+  }
+
   Future<void> loadMore() async {
-    if (!_hasMore || _isLoadingMore || _resolvedSourceId.isEmpty) return;
+    if (!_hasMore || _isLoadingMore || _sourceId.isEmpty) return;
     final client = _client ?? ref.read(remoteClientProvider);
     if (client == null) return;
-    _client = client;
 
     _isLoadingMore = true;
     ref.read(loadingMoreProvider.notifier).update(true);
+    final nextPage = _page + 1;
 
     try {
-      _page++;
-      logger.log(_tag, 'loadMore → page $_page');
-      final newItems =
-          await _loadPage(client, _resolvedSourceId, page: _page);
-      if (newItems.isEmpty) return; // _hasMore déjà mis à false
-
-      final current = state.requireValue;
-      state = AsyncData([...current, ...newItems]);
-      logger.log(_tag,
-          'Feed étendu : ${current.length} + ${newItems.length} = ${current.length + newItems.length}');
-    } catch (e, st) {
-      logger.error(_tag, 'loadMore erreur page $_page: $e', st);
-      _page--; // rollback pour pouvoir retenter
+      final newItems = await _fetchPage(
+        client,
+        _sourceId,
+        page: nextPage,
+        resolveVideos: true,
+      );
+      if (newItems.isEmpty) {
+        _hasMore = false;
+        return;
+      }
+      _page = nextPage;
+      final current = state.value ?? const <FeedItem>[];
+      final seen = current.map((e) => e.id).toSet();
+      final deduped =
+          newItems.where((item) => !seen.contains(item.id)).toList();
+      state = AsyncData([...current, ...deduped]);
+      _hasMore = newItems.length >= itemsPerPage;
+    } catch (error) {
+      logger.error(_tag, 'loadMore page $nextPage: $error');
     } finally {
       _isLoadingMore = false;
       ref.read(loadingMoreProvider.notifier).update(false);
     }
   }
 
-  Future<void> reload() async {
+  Future<void> refresh() async {
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(() => build());
+    state = await AsyncValue.guard(build);
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
 
-  String? _tryExtractVideoFromLink(String link) {
-    if (link.isEmpty || !link.startsWith('{')) return null;
-    try {
-      final parsed = json.decode(link) as Map<String, dynamic>;
-      final hd = parsed['hd'] as String?;
-      final sd = parsed['sd'] as String?;
-      final url = parsed['url'] as String?;
-      if (hd != null && hd.isNotEmpty) return hd;
-      if (sd != null && sd.isNotEmpty) return sd;
-      if (url != null && url.isNotEmpty) return url;
-    } catch (_) {}
-    return null;
+  String _shortError(Object error) {
+    final text = error.toString().replaceAll('Exception: ', '');
+    return text.length > 180 ? '${text.substring(0, 180)}…' : text;
   }
 
-  Future<List<dynamic>> _fetchItems(
-      RemoteApiClient client, String sourceId, {int page = 1}) async {
-    try {
-      final data = await client
-          .popular(sourceId, page: page)
-          .timeout(const Duration(seconds: 20));
-      final items = _extractItems(data);
-      if (items.isNotEmpty) return items;
-    } catch (_) {}
+  Future<List<Map<String, dynamic>>> _fetchRawItems(
+    RemoteApiClient client,
+    String sourceId, {
+    required int page,
+  }) async {
+    final attempts = <Future<Map<String, dynamic>> Function()>[
+      () => client.popular(sourceId, page: page),
+      () => client.latest(sourceId, page: page),
+      () => client.search(sourceId, '', page: page),
+    ];
 
-    try {
-      final data = await client
-          .latest(sourceId, page: page)
-          .timeout(const Duration(seconds: 20));
-      return _extractItems(data);
-    } catch (e) {
-      throw Exception('popular + latest ont échoué pour $sourceId : $e');
+    Object? lastError;
+    for (final attempt in attempts) {
+      try {
+        final data = await attempt().timeout(const Duration(seconds: 20));
+        final items = extractRawItems(data);
+        if (items.isNotEmpty) {
+          return items;
+        }
+      } catch (error) {
+        lastError = error;
+      }
     }
+    if (lastError != null) throw lastError;
+    return const [];
   }
-
-  List<dynamic> _extractItems(Map<String, dynamic> data) =>
-      data['list'] as List? ??
-      data['mangas'] as List? ??
-      data['items'] as List? ??
-      data['data'] as List? ??
-      data['results'] as List? ??
-      data['videos'] as List? ??
-      data['posts'] as List? ??
-      data['content'] as List? ??
-      [];
 
   Future<String?> _resolveVideoUrl(
-      RemoteApiClient client, String sourceId, String itemLink) async {
+    RemoteApiClient client,
+    String sourceId,
+    String itemLink,
+  ) async {
     try {
       final data = await client
           .videos(sourceId, itemLink)
           .timeout(const Duration(seconds: 20));
-      final vids = data['videos'] as List? ?? [];
-      final url = _bestVideoUrl(vids);
+      final url = _bestVideoUrl(data['videos'] as List? ?? const []);
       if (url != null) return url;
     } catch (_) {}
 
@@ -297,20 +382,20 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       final chapters = detail['chapters'] as List? ??
           detail['episodes'] as List? ??
           detail['chapter_list'] as List? ??
-          [];
+          const [];
       if (chapters.isEmpty) return null;
 
-      final ep = chapters.length == 1 ? chapters.first : chapters.last;
-      final epUrl = ep['url'] as String? ??
-          ep['link'] as String? ??
-          ep['chapterUrl'] as String? ??
+      final episode = chapters.length == 1 ? chapters.first : chapters.last;
+      final episodeUrl = episode['url'] as String? ??
+          episode['link'] as String? ??
+          episode['chapterUrl'] as String? ??
           '';
-      if (epUrl.isEmpty) return null;
+      if (episodeUrl.isEmpty) return null;
 
-      final vidData = await client
-          .videos(sourceId, epUrl)
+      final videoData = await client
+          .videos(sourceId, episodeUrl)
           .timeout(const Duration(seconds: 20));
-      return _bestVideoUrl(vidData['videos'] as List? ?? []);
+      return _bestVideoUrl(videoData['videos'] as List? ?? const []);
     } catch (_) {}
 
     return null;
@@ -318,76 +403,17 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
 
   String? _bestVideoUrl(List<dynamic> videos) {
     if (videos.isEmpty) return null;
-    for (final pref in ['1080', '720', '480']) {
-      for (final v in videos) {
-        final q = (v['quality'] as String? ?? '').toLowerCase();
-        final url = v['url'] as String? ?? '';
-        if (q.contains(pref) && url.isNotEmpty) return url;
+    for (final quality in const ['1080', '720', '480']) {
+      for (final video in videos) {
+        final label = (video['quality'] as String? ?? '').toLowerCase();
+        final url = video['url'] as String? ?? '';
+        if (label.contains(quality) && url.isNotEmpty) return url;
       }
     }
-    final url = videos.first['url'] as String? ?? '';
-    return url.isNotEmpty ? url : null;
-  }
-
-  FeedItem _toFeedItem(
-    Map<String, dynamic> raw,
-    String sourceName,
-    String videoUrl,
-    int index,
-  ) {
-    String thumbnail = '';
-    final link = raw['link'] as String? ?? '';
-    if (link.startsWith('{')) {
-      try {
-        final parsed = json.decode(link) as Map<String, dynamic>;
-        thumbnail = parsed['poster'] as String? ?? '';
-      } catch (_) {}
+    for (final video in videos) {
+      final url = video['url'] as String? ?? '';
+      if (url.isNotEmpty) return url;
     }
-    if (thumbnail.isEmpty) {
-      thumbnail = raw['imageUrl'] as String? ??
-          raw['cover'] as String? ??
-          raw['thumbnail'] as String? ??
-          raw['image'] as String? ??
-          '';
-    }
-
-    final title = raw['name'] as String? ??
-        raw['title'] as String? ??
-        raw['chapter_name'] as String? ??
-        'Sans titre';
-    final author = raw['author'] as String? ??
-        raw['creator'] as String? ??
-        sourceName;
-    final genreStr = raw['genre'] as String? ??
-        raw['genres'] as String? ??
-        raw['tags'] as String? ??
-        (raw['description'] as String? ?? '');
-
-    final seed = title.hashCode.abs();
-    final rng = Random(seed + index);
-
-    return FeedItem(
-      id: raw['link'] as String? ?? raw['url'] as String? ?? 'item_$index',
-      videoUrl: videoUrl,
-      thumbnailUrl: thumbnail,
-      title: title,
-      authorUsername: '@${author.toLowerCase().replaceAll(' ', '_')}',
-      authorAvatar: thumbnail,
-      likes: 1000 + rng.nextInt(499000),
-      comments: 100 + rng.nextInt(9900),
-      shares: 200 + rng.nextInt(19800),
-      bookmarks: 50 + rng.nextInt(4950),
-      hashtags: _parseGenres(genreStr).take(4).toList(),
-      soundName: '♪ ${title.split(' ').take(3).join(' ')} — Watchtower',
-    );
-  }
-
-  List<String> _parseGenres(String genreStr) {
-    if (genreStr.isEmpty) return ['watchtower'];
-    return genreStr
-        .split(RegExp(r'[,|/·]'))
-        .map((g) => g.trim().toLowerCase().replaceAll(' ', ''))
-        .where((g) => g.isNotEmpty && g.length <= 20)
-        .toList();
+    return null;
   }
 }

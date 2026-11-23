@@ -1,112 +1,100 @@
 import 'package:flutter/material.dart';
 
-class LiveStoriesBar extends StatelessWidget {
-  const LiveStoriesBar({super.key});
+import '../../../core/theme/tokens.dart';
+import '../../../core/widgets/live_badge.dart';
+import '../../../core/widgets/reel_avatar.dart';
+import '../models/feed_item.dart';
 
-  static final _stories = [
-    _Story('https://i.pravatar.cc/150?img=1', 'Medusa', true),
-    _Story('https://i.pravatar.cc/150?img=2', 'OhPlai', true),
-    _Story('https://i.pravatar.cc/150?img=3', 'JoJobox ⭐', true),
-    _Story('https://i.pravatar.cc/150?img=4', '🕵 ENNEMI...', true),
-    _Story('https://i.pravatar.cc/150?img=5', 'Bie...', true),
-    _Story('https://i.pravatar.cc/150?img=6', 'Drake', false),
-  ];
+/// Horizontal strip of creators currently live, built from the feed authors.
+class LiveStoriesBar extends StatelessWidget {
+  const LiveStoriesBar({
+    super.key,
+    required this.items,
+    this.onSelect,
+  });
+
+  final List<FeedItem> items;
+  final ValueChanged<FeedItem>? onSelect;
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      height: 100,
-      color: Colors.transparent,
+    final authors = <String, FeedItem>{};
+    for (final item in items) {
+      authors.putIfAbsent(item.authorUsername, () => item);
+    }
+    if (authors.isEmpty) return const SizedBox.shrink();
+
+    final entries = authors.values.take(12).toList(growable: false);
+
+    return SizedBox(
+      height: 98,
       child: ListView.separated(
         scrollDirection: Axis.horizontal,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
-        itemCount: _stories.length,
-        separatorBuilder: (_, __) => const SizedBox(width: 12),
-        itemBuilder: (context, i) => _StoryItem(story: _stories[i]),
+        padding: const EdgeInsets.symmetric(horizontal: space12),
+        itemCount: entries.length,
+        separatorBuilder: (_, __) => const SizedBox(width: space12),
+        itemBuilder: (context, index) {
+          final item = entries[index];
+          final isLive = index < 2;
+          return _StoryTile(
+            item: item,
+            isLive: isLive,
+            onTap: () => onSelect?.call(item),
+          );
+        },
       ),
     );
   }
 }
 
-class _Story {
-  const _Story(this.avatar, this.name, this.isLive);
-  final String avatar, name;
-  final bool isLive;
-}
+class _StoryTile extends StatelessWidget {
+  const _StoryTile({
+    required this.item,
+    required this.isLive,
+    required this.onTap,
+  });
 
-class _StoryItem extends StatelessWidget {
-  const _StoryItem({required this.story});
-  final _Story story;
+  final FeedItem item;
+  final bool isLive;
+  final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: () {},
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
       child: SizedBox(
         width: 64,
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
             Stack(
-              alignment: Alignment.bottomCenter,
               clipBehavior: Clip.none,
               children: [
-                // Pink border ring for LIVE
-                Container(
-                  width: 64,
-                  height: 64,
-                  decoration: BoxDecoration(
-                    shape: BoxShape.circle,
-                    border: story.isLive
-                        ? Border.all(color: const Color(0xFFFE2C55), width: 2.5)
-                        : Border.all(color: Colors.white24, width: 1.5),
-                  ),
-                  padding: const EdgeInsets.all(2.5),
-                  child: ClipOval(
-                    child: Image.network(
-                      story.avatar,
-                      fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
-                        color: const Color(0xFF1C2340),
-                        child: const Icon(Icons.person, color: Colors.white54),
-                      ),
-                    ),
-                  ),
+                ReelAvatar(
+                  url: item.authorAvatar,
+                  name: item.authorUsername,
+                  size: 58,
+                  showLiveRing: isLive,
+                  borderColor: Colors.white24,
+                  borderWidth: isLive ? 0 : 1.5,
                 ),
-                if (story.isLive)
-                  Positioned(
-                    bottom: -8,
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 6, vertical: 2),
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFFE2C55),
-                        borderRadius: BorderRadius.circular(3),
-                      ),
-                      child: const Text(
-                        'LIVE',
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 10,
-                          fontWeight: FontWeight.w900,
-                          height: 1,
-                        ),
-                      ),
-                    ),
+                if (isLive)
+                  const Positioned(
+                    bottom: -6,
+                    left: 0,
+                    right: 0,
+                    child: Center(child: LiveBadge(compact: true)),
                   ),
               ],
             ),
-            const SizedBox(height: 12),
+            const SizedBox(height: space10),
             Text(
-              story.name,
-              style: const TextStyle(
-                color: Colors.white,
-                fontSize: 11,
-                height: 1.2,
-              ),
+              item.authorUsername.replaceFirst('@', ''),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
               textAlign: TextAlign.center,
+              style: AppTokens.labelS.copyWith(color: colorTextPrimary),
             ),
           ],
         ),

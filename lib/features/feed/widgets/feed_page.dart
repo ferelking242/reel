@@ -1,414 +1,434 @@
-import 'package:flutter/material.dart';
-import 'package:flutter_hooks/flutter_hooks.dart';
+import 'dart:async';
+
 import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
-import '../../../core/theme/tokens.dart';
-import '../models/feed_item.dart';
-import 'feed_sidebar.dart';
-import 'feed_overlay_bottom.dart';
 
-/// Un item du feed TikTok-style.
-///
-/// [player]   : Player media_kit pré-créé et déjà ouvert par le pool du feed.
-/// [isActive] : true quand c'est la page visible dans le PageView.
-class FeedPage extends HookWidget {
+import '../../../core/haptics.dart';
+import '../../../core/icons/reel_icons.dart';
+import '../../../core/theme/tokens.dart';
+import '../../../core/widgets/reel_sheet.dart';
+import '../models/feed_item.dart';
+import '../providers/engagement_provider.dart';
+import 'feed_overlay_bottom.dart';
+import 'feed_progress_bar.dart';
+import 'feed_sidebar.dart';
+import 'like_burst.dart';
+
+/// One full-screen page of the vertical feed.
+class FeedPage extends ConsumerStatefulWidget {
   const FeedPage({
     super.key,
     required this.item,
-    required this.player,
     required this.isActive,
+    required this.onOpenComments,
+    required this.onOpenShare,
+    this.player,
+    this.muted = true,
   });
 
   final FeedItem item;
-  final Player player;
   final bool isActive;
+  final VoidCallback onOpenComments;
+  final VoidCallback onOpenShare;
+  final Player? player;
+  final bool muted;
+
+  @override
+  ConsumerState<FeedPage> createState() => _FeedPageState();
+}
+
+class _FeedPageState extends ConsumerState<FeedPage> {
+  VideoController? _controller;
+  StreamSubscription<bool>? _completedSub;
+
+  bool _pausedByUser = false;
+  bool _holdPaused = false;
+
+  Offset? _burstPosition;
+  int _burstId = 0;
+
+  Player? get _player => widget.player;
+
+  @override
+  void initState() {
+    super.initState();
+    final player = _player;
+    if (player != null) {
+      _controller = VideoController(player);
+      _applyVolume();
+      _completedSub = player.stream.completed.listen((completed) {
+        if (completed && widget.isActive) {
+          player.seek(Duration.zero);
+          player.play();
+        }
+      });
+    }
+    if (widget.isActive) _startPlayback();
+  }
+
+  @override
+  void didUpdateWidget(covariant FeedPage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.muted != widget.muted) _applyVolume();
+    if (oldWidget.isActive != widget.isActive) {
+      if (widget.isActive) {
+        _startPlayback();
+      } else {
+        _pausePlayback(reset: true);
+      }
+    }
+    if (oldWidget.player != widget.player) {
+      _controller = widget.player == null
+          ? null
+          : VideoController(widget.player!);
+    }
+  }
+
+  @override
+  void dispose() {
+    _completedSub?.cancel();
+    super.dispose();
+  }
+
+  void _applyVolume() {
+    _player?.setVolume(widget.muted ? 0 : 100);
+  }
+
+  void _startPlayback() {
+    _applyVolume();
+    _player?.play();
+  }
+
+  void _pausePlayback({bool reset = false}) {
+    final player = _player;
+    if (player == null) return;
+    player.pause();
+    if (reset) player.seek(Duration.zero);
+    _pausedByUser = false;
+    _holdPaused = false;
+  }
+
+  void _togglePlayback() {
+    final player = _player;
+    if (player == null) {
+      showReelToast(
+        context,
+        'Aperçu de démonstration — aucune vidéo chargée',
+        icon: ReelGlyph.effects,
+      );
+      return;
+    }
+    Haptics.light();
+    if (player.state.playing) {
+      player.pause();
+      setState(() => _pausedByUser = true);
+    } else {
+      player.play();
+      setState(() => _pausedByUser = false);
+    }
+  }
+
+  void _likeFromDoubleTap(Offset position) {
+    final engagement = ref.read(engagementProvider);
+    if (!engagement.isLiked(widget.item.id)) {
+      ref.read(engagementProvider.notifier).toggleLike(widget.item.id);
+    }
+    Haptics.medium();
+    setState(() {
+      _burstPosition = position;
+      _burstId++;
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
-    // ── Contrôleur vidéo ────────────────────────────────────────────────────
-    final controller = useMemoized(() => VideoController(player), [player]);
-
-    // ── Long-press pause ────────────────────────────────────────────────────
-    final pausedByLongPress = useState(false);
-
-    // ── Double-tap like : position + animation ───────────────────────────────
-    final heartPosition = useState<Offset?>(null);
-    final heartCtrl = useAnimationController(
-      duration: const Duration(milliseconds: 700),
-    );
-
-    // ── Play / pause selon la page active ────────────────────────────────────
-    useEffect(() {
-      if (isActive) {
-        player.play();
-      } else {
-        player.pause();
-        player.seek(Duration.zero);
-        pausedByLongPress.value = false;
-      }
-      return null;
-    }, [isActive]);
+    final item = widget.item;
 
     return GestureDetector(
-      // ── Tap simple : play / pause (ignoré si long-press actif) ─────────────
-      onTap: () {
-        if (pausedByLongPress.value) return;
-        if (player.state.playing) {
-          player.pause();
-        } else {
-          player.play();
-        }
-      },
-
-      // ── Double-tap : animation cœur ─────────────────────────────────────────
-      onDoubleTapDown: (details) {
-        heartPosition.value = details.localPosition;
-      },
+      behavior: HitTestBehavior.opaque,
+      onTap: _togglePlayback,
+      onDoubleTapDown: (details) =>
+          _burstPosition = details.localPosition,
       onDoubleTap: () {
-        heartCtrl.forward(from: 0);
+        final position = _burstPosition ??
+            Offset(
+              MediaQuery.sizeOf(context).width / 2,
+              MediaQuery.sizeOf(context).height / 2,
+            );
+        _likeFromDoubleTap(position);
       },
-
-      // ── Long-press : pause pendant le hold ──────────────────────────────────
       onLongPressStart: (_) {
-        if (!isActive) return;
-        player.pause();
-        pausedByLongPress.value = true;
+        if (_player == null) return;
+        _player!.pause();
+        setState(() => _holdPaused = true);
+        Haptics.medium();
       },
       onLongPressEnd: (_) {
-        if (!isActive) return;
-        player.play();
-        pausedByLongPress.value = false;
+        if (_player == null) return;
+        if (!_pausedByUser) _player!.play();
+        setState(() => _holdPaused = false);
       },
       onLongPressCancel: () {
-        if (!isActive || !pausedByLongPress.value) return;
-        player.play();
-        pausedByLongPress.value = false;
+        if (_player == null) return;
+        if (!_pausedByUser) _player!.play();
+        setState(() => _holdPaused = false);
       },
-
       child: Stack(
         fit: StackFit.expand,
         children: [
-          // ── Fond : vidéo ou thumbnail ────────────────────────────────────────
-          _VideoBackground(
+          _FeedBackground(
             item: item,
-            controller: controller,
-            player: player,
+            player: _player,
+            controller: _controller,
           ),
-
-          // ── Dégradés ─────────────────────────────────────────────────────────
-          const _BottomGradient(),
-          const _TopGradient(),
-
-          // ── Overlay bas : infos + sidebar ────────────────────────────────────
+          const _Scrims(),
           Positioned(
             left: 0,
             right: 0,
             bottom: 0,
-            child: _BottomOverlay(item: item),
-          ),
-
-          // ── Progress bar (trait fin en bas, style TikTok) ─────────────────────
-          Positioned(
-            bottom: 0,
-            left: 0,
-            right: 0,
-            child: _VideoProgressBar(player: player),
-          ),
-
-          // ── Animation cœur double-tap ─────────────────────────────────────────
-          if (heartPosition.value != null)
-            Positioned(
-              left: heartPosition.value!.dx - 55,
-              top: heartPosition.value!.dy - 55,
-              child: IgnorePointer(
-                child: _HeartBurst(controller: heartCtrl),
+            child: Padding(
+              padding: EdgeInsets.only(
+                bottom: AppTokens.feedOverlayBottomInset +
+                    MediaQuery.paddingOf(context).bottom,
               ),
-            ),
-
-          // ── Indicateur pause (long-press) ─────────────────────────────────────
-          if (pausedByLongPress.value)
-            const Center(child: _PauseIndicator()),
-        ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Progress bar vidéo (thin bottom, style TikTok)
-// ─────────────────────────────────────────────────────────────────────────────
-class _VideoProgressBar extends HookWidget {
-  const _VideoProgressBar({required this.player});
-  final Player player;
-
-  @override
-  Widget build(BuildContext context) {
-    return StreamBuilder<Duration>(
-      stream: player.stream.position,
-      builder: (context, posSnap) {
-        return StreamBuilder<Duration>(
-          stream: player.stream.duration,
-          builder: (context, durSnap) {
-            final pos = posSnap.data ?? Duration.zero;
-            final dur = durSnap.data ?? Duration.zero;
-            final progress =
-                dur.inMilliseconds > 0 ? pos.inMilliseconds / dur.inMilliseconds : 0.0;
-
-            return SizedBox(
-              height: 3,
-              child: LinearProgressIndicator(
-                value: progress.clamp(0.0, 1.0),
-                backgroundColor: Colors.white24,
-                valueColor: const AlwaysStoppedAnimation<Color>(Colors.white),
-                minHeight: 3,
-              ),
-            );
-          },
-        );
-      },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Animation cœur (double-tap like)
-// ─────────────────────────────────────────────────────────────────────────────
-class _HeartBurst extends HookWidget {
-  const _HeartBurst({required this.controller});
-  final AnimationController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    // Scale : monte en flèche puis revient élastique
-    final scale = useMemoized(
-      () => TweenSequence<double>([
-        TweenSequenceItem(
-          tween: Tween(begin: 0.3, end: 1.4)
-              .chain(CurveTween(curve: Curves.easeOut)),
-          weight: 40,
-        ),
-        TweenSequenceItem(
-          tween: Tween(begin: 1.4, end: 1.0)
-              .chain(CurveTween(curve: Curves.elasticOut)),
-          weight: 60,
-        ),
-      ]).animate(controller),
-      [controller],
-    );
-
-    // Opacité : reste à 1 jusqu'à 60%, puis disparaît
-    final opacity = useMemoized(
-      () => TweenSequence<double>([
-        TweenSequenceItem(
-          tween: ConstantTween(1.0),
-          weight: 60,
-        ),
-        TweenSequenceItem(
-          tween: Tween(begin: 1.0, end: 0.0)
-              .chain(CurveTween(curve: Curves.easeIn)),
-          weight: 40,
-        ),
-      ]).animate(controller),
-      [controller],
-    );
-
-    return AnimatedBuilder(
-      animation: controller,
-      builder: (_, __) {
-        if (controller.value == 0) return const SizedBox.shrink();
-        return Opacity(
-          opacity: opacity.value,
-          child: Transform.scale(
-            scale: scale.value,
-            child: const SizedBox(
-              width: 110,
-              height: 110,
-              child: Icon(
-                Icons.favorite_rounded,
-                color: colorLike,
-                size: 110,
-                shadows: [
-                  Shadow(
-                    color: Colors.black54,
-                    blurRadius: 16,
-                    offset: Offset(0, 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.only(
+                        left: space16,
+                        right: space12,
+                      ),
+                      child: FeedOverlayBottom(item: item),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.only(right: space8, bottom: space8),
+                    child: FeedSidebar(
+                      item: item,
+                      isActive: widget.isActive,
+                      onOpenComments: widget.onOpenComments,
+                      onOpenShare: widget.onOpenShare,
+                    ),
                   ),
                 ],
               ),
             ),
           ),
+          if (_player != null)
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: FeedProgressBar(player: _player!),
+            ),
+          PauseOverlay(visible: _pausedByUser || _holdPaused),
+          if (_burstPosition != null)
+            LikeBurst(
+              key: ValueKey(_burstId),
+              position: _burstPosition!,
+              onDone: () {
+                if (mounted) setState(() => _burstPosition = null);
+              },
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Background: video over poster
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _FeedBackground extends StatelessWidget {
+  const _FeedBackground({
+    required this.item,
+    required this.player,
+    required this.controller,
+  });
+
+  final FeedItem item;
+  final Player? player;
+  final VideoController? controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        if (item.thumbnailUrl.isEmpty)
+          _GradientPoster(seed: item.id)
+        else
+          CachedNetworkImage(
+            imageUrl: item.thumbnailUrl,
+            fit: BoxFit.cover,
+            fadeInDuration: const Duration(milliseconds: 200),
+            placeholder: (_, __) => _GradientPoster(seed: item.id),
+            errorWidget: (_, __, ___) => _GradientPoster(seed: item.id),
+          ),
+        if (controller != null && player != null)
+          _VideoLayer(
+            player: player!,
+            controller: controller!,
+            poster: item.thumbnailUrl.isEmpty
+                ? _GradientPoster(seed: item.id)
+                : null,
+          ),
+      ],
+    );
+  }
+}
+
+class _VideoLayer extends StatelessWidget {
+  const _VideoLayer({
+    required this.player,
+    required this.controller,
+    required this.poster,
+  });
+
+  final Player player;
+  final VideoController controller;
+  final Widget? poster;
+
+  @override
+  Widget build(BuildContext context) {
+    return StreamBuilder<bool>(
+      stream: player.stream.buffering,
+      initialData: true,
+      builder: (context, snapshot) {
+        final buffering = snapshot.data ?? true;
+        return Stack(
+          fit: StackFit.expand,
+          children: [
+            AnimatedOpacity(
+              opacity: buffering ? 0 : 1,
+              duration: durationNormal,
+              child: Video(
+                controller: controller,
+                controls: NoVideoControls,
+                fit: BoxFit.cover,
+                fill: Colors.transparent,
+              ),
+            ),
+            if (poster != null && buffering) poster!,
+            FeedBufferIndicator(visible: buffering),
+          ],
         );
       },
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Indicateur "⏸ PAUSÉ" (long-press)
-// ─────────────────────────────────────────────────────────────────────────────
-class _PauseIndicator extends StatelessWidget {
-  const _PauseIndicator();
+/// Generated poster used for demo items and while thumbnails load.
+class _GradientPoster extends StatelessWidget {
+  const _GradientPoster({required this.seed});
+
+  final String seed;
+
+  static const _palettes = <List<Color>>[
+    [Color(0xFF2B1055), Color(0xFF7597DE)],
+    [Color(0xFF0F2027), Color(0xFF2C5364)],
+    [Color(0xFF42275A), Color(0xFF734B6D)],
+    [Color(0xFF1F1C2C), Color(0xFF928DAB)],
+    [Color(0xFF3A1C71), Color(0xFFD76D77)],
+    [Color(0xFF232526), Color(0xFF414345)],
+  ];
+
+  @override
+  Widget build(BuildContext context) {
+    final hash = seed.codeUnits.fold<int>(7, (a, b) => a * 31 + b).abs();
+    final colors = _palettes[hash % _palettes.length];
+    final glyph = hash.isEven ? ReelGlyph.play : ReelGlyph.music;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: colors,
+        ),
+      ),
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Positioned(
+            top: -60,
+            right: -40,
+            child: _BlurredBlob(color: colors.last, size: 220),
+          ),
+          Positioned(
+            bottom: 80,
+            left: -50,
+            child: _BlurredBlob(color: colors.first, size: 200),
+          ),
+          Center(
+            child: Opacity(
+              opacity: 0.14,
+              child: ReelIcon(glyph, size: 160, color: Colors.white),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _BlurredBlob extends StatelessWidget {
+  const _BlurredBlob({required this.color, required this.size});
+
+  final Color color;
+  final double size;
 
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+      width: size,
+      height: size,
       decoration: BoxDecoration(
-        color: Colors.black54,
-        borderRadius: BorderRadius.circular(radiusLg),
-      ),
-      child: const Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.pause_rounded, color: Colors.white, size: 22),
-          SizedBox(width: 6),
-          Text(
-            'Maintenir pour rester en pause',
-            style: TextStyle(
-              color: Colors.white,
-              fontSize: 13,
-              fontWeight: FontWeight.w500,
-            ),
-          ),
-        ],
+        shape: BoxShape.circle,
+        gradient: RadialGradient(
+          colors: [color.withValues(alpha: 0.75), Colors.transparent],
+        ),
       ),
     );
   }
 }
 
-// ─────────────────────────────────────────────────────────────────────────────
-// Fond : vidéo (media_kit) ou thumbnail (fallback)
-// ─────────────────────────────────────────────────────────────────────────────
-class _VideoBackground extends HookWidget {
-  const _VideoBackground({
-    required this.item,
-    required this.controller,
-    required this.player,
-  });
-
-  final FeedItem item;
-  final VideoController controller;
-  final Player player;
+class _Scrims extends StatelessWidget {
+  const _Scrims();
 
   @override
   Widget build(BuildContext context) {
-    final hasVideo = item.videoUrl.isNotEmpty;
-
-    if (!hasVideo) {
-      return _Thumbnail(url: item.thumbnailUrl);
-    }
-
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        // Thumbnail visible tant que la vidéo n'est pas prête
-        _Thumbnail(url: item.thumbnailUrl),
-
-        // Vidéo media_kit
-        StreamBuilder<bool>(
-          stream: player.stream.buffering,
-          builder: (context, snap) {
-            final buffering = snap.data ?? true;
-            return AnimatedOpacity(
-              opacity: buffering ? 0.0 : 1.0,
-              duration: const Duration(milliseconds: 200),
-              child: Video(
-                controller: controller,
-                controls: NoVideoControls,
-                fill: Colors.transparent,
-                fit: BoxFit.cover,
+    return const IgnorePointer(
+      child: Column(
+        children: [
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.topCenter,
+                end: Alignment.bottomCenter,
+                colors: [Color(0x99000000), Color(0x00000000)],
               ),
-            );
-          },
-        ),
-      ],
-    );
-  }
-}
-
-class _Thumbnail extends StatelessWidget {
-  const _Thumbnail({required this.url});
-  final String url;
-
-  @override
-  Widget build(BuildContext context) {
-    if (url.isEmpty) return Container(color: colorBgCard);
-    return CachedNetworkImage(
-      imageUrl: url,
-      fit: BoxFit.cover,
-      placeholder: (_, __) => Container(color: colorBgCard),
-      errorWidget: (_, __, ___) => Container(color: colorBgCard),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Overlay bas (titre + sidebar)
-// ─────────────────────────────────────────────────────────────────────────────
-class _BottomOverlay extends StatelessWidget {
-  const _BottomOverlay({required this.item});
-  final FeedItem item;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 60),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.end,
-        children: [
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: FeedOverlayBottom(item: item),
             ),
+            child: SizedBox(height: 130, width: double.infinity),
           ),
-          Padding(
-            padding: const EdgeInsets.only(right: 8, bottom: 8),
-            child: FeedSidebar(item: item),
+          Spacer(),
+          DecoratedBox(
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.bottomCenter,
+                end: Alignment.topCenter,
+                colors: [Color(0xD9000000), Color(0x00000000)],
+              ),
+            ),
+            child: SizedBox(height: 260, width: double.infinity),
           ),
         ],
-      ),
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Dégradés
-// ─────────────────────────────────────────────────────────────────────────────
-class _BottomGradient extends StatelessWidget {
-  const _BottomGradient();
-
-  @override
-  Widget build(BuildContext context) {
-    return const DecoratedBox(
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.bottomCenter,
-          end: Alignment.center,
-          colors: [Color(0xCC000000), Colors.transparent],
-        ),
-      ),
-    );
-  }
-}
-
-class _TopGradient extends StatelessWidget {
-  const _TopGradient();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Align(
-      alignment: Alignment.topCenter,
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Color(0x88000000), Colors.transparent],
-          ),
-        ),
-        child: SizedBox(height: 120, width: double.infinity),
       ),
     );
   }

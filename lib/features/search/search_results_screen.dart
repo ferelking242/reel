@@ -1,26 +1,34 @@
-import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
-import 'package:reel/core/theme/tokens.dart';
-import 'package:reel/core/widgets/video_thumbnail.dart';
-import 'package:reel/features/search/search_filters_sheet.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
-class SearchResultsScreen extends StatefulWidget {
+import '../../core/icons/reel_icons.dart';
+import '../../core/theme/tokens.dart';
+import '../../core/utils/formatters.dart';
+import '../../core/widgets/follow_button.dart';
+import '../../core/widgets/pressable.dart';
+import '../../core/widgets/reel_avatar.dart';
+import '../../core/widgets/reel_sheet.dart';
+import '../../core/widgets/skeletons.dart';
+import '../../core/widgets/video_thumbnail.dart';
+import '../feed/models/feed_item.dart';
+import '../feed/widgets/item_sheet.dart';
+import 'providers/search_provider.dart';
+import 'search_filters_sheet.dart';
+
+/// Result tabs for [query]: top, videos, users, sounds and hashtags.
+class SearchResultsScreen extends ConsumerStatefulWidget {
   const SearchResultsScreen({super.key, required this.query});
+
   final String query;
 
   @override
-  State<SearchResultsScreen> createState() => _SearchResultsScreenState();
+  ConsumerState<SearchResultsScreen> createState() =>
+      _SearchResultsScreenState();
 }
 
-class _SearchResultsScreenState extends State<SearchResultsScreen>
+class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen>
     with SingleTickerProviderStateMixin {
-  late final TabController _tabs;
-
-  @override
-  void initState() {
-    super.initState();
-    _tabs = TabController(length: 6, vsync: this);
-  }
+  late final TabController _tabs = TabController(length: 5, vsync: this);
 
   @override
   void dispose() {
@@ -30,460 +38,181 @@ class _SearchResultsScreenState extends State<SearchResultsScreen>
 
   @override
   Widget build(BuildContext context) {
+    final resultsAsync = ref.watch(searchResultsProvider(widget.query));
+    final sort = ref.watch(searchSortProvider);
+
     return Column(
       children: [
-        // Tab bar + filter icon
-        Container(
-          color: Colors.white,
-          child: Row(
-            children: [
-              Expanded(
-                child: TabBar(
-                  controller: _tabs,
-                  isScrollable: true,
-                  labelColor: Colors.black,
-                  unselectedLabelColor: const Color(0xFF8A8A8A),
-                  indicatorColor: Colors.black,
-                  indicatorWeight: 2,
-                  labelStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w600),
-                  unselectedLabelStyle: const TextStyle(
-                      fontSize: 13, fontWeight: FontWeight.w400),
-                  tabs: const [
-                    Tab(text: 'Top'),
-                    Tab(text: 'Vidéos'),
-                    Tab(text: 'Utilisateurs'),
-                    Tab(text: 'Sons'),
-                    Tab(text: 'LIVE'),
-                    Tab(text: 'Hashtags'),
-                  ],
-                ),
-              ),
-              GestureDetector(
-                onTap: () => showModalBottomSheet(
-                  context: context,
-                  isScrollControlled: true,
-                  shape: const RoundedRectangleBorder(
-                    borderRadius: BorderRadius.vertical(
-                        top: Radius.circular(AppTokens.radiusLg)),
-                  ),
-                  builder: (_) => const SearchFiltersSheet(),
-                ),
-                child: const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                  child: Icon(Icons.tune_rounded, color: Colors.black, size: 22),
-                ),
-              ),
-            ],
-          ),
-        ),
-        Expanded(
-          child: TabBarView(
-            controller: _tabs,
-            children: [
-              _TopTab(query: widget.query),
-              _VideosTab(query: widget.query),
-              _UsersTab(query: widget.query),
-              _SoundsTab(),
-              _LiveTab(),
-              _HashtagsTab(query: widget.query),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-// ─── Top tab ─────────────────────────────────────────────────────────────────
-class _TopTab extends StatelessWidget {
-  const _TopTab({required this.query});
-  final String query;
-
-  static final _videos = [
-    _VideoResult(
-      'https://picsum.photos/seed/top1/400/700',
-      '29/4',
-      'Play à telemi goût c\'est le big like et republier...',
-      'https://i.pravatar.cc/150?img=10',
-      '😁LE.MEC.ST...',
-      84,
-      false,
-    ),
-    _VideoResult(
-      'https://picsum.photos/seed/top2/400/700',
-      '1/9/2023',
-      '😱😱 #crab #big #crazy #alexfunfacts',
-      'https://i.pravatar.cc/150?img=11',
-      'alex.funfacts',
-      3700000,
-      false,
-    ),
-    _VideoResult(
-      'https://picsum.photos/seed/top3/400/700',
-      '14/3',
-      'Big energy vibes check this out',
-      'https://i.pravatar.cc/150?img=12',
-      'energy_vibes',
-      12400,
-      false,
-    ),
-    _VideoResult(
-      'https://picsum.photos/seed/top4/400/700',
-      '5/6',
-      'The big challenge everyone is doing 🔥',
-      'https://i.pravatar.cc/150?img=13',
-      'challenge_crew',
-      290000,
-      true,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(2),
-      children: [
-        // 2-column staggered grid
-        _VideoGrid2Col(videos: _videos),
-      ],
-    );
-  }
-}
-
-class _VideoGrid2Col extends StatelessWidget {
-  const _VideoGrid2Col({required this.videos});
-  final List<_VideoResult> videos;
-
-  @override
-  Widget build(BuildContext context) {
-    final pairs = <List<_VideoResult>>[];
-    for (var i = 0; i < videos.length; i += 2) {
-      pairs.add(videos.sublist(i, i + 2 > videos.length ? videos.length : i + 2));
-    }
-    return Column(
-      children: pairs.map((pair) {
-        return Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: pair
-              .map((v) => Expanded(child: _VideoCard(video: v)))
-              .toList(),
-        );
-      }).toList(),
-    );
-  }
-}
-
-class _VideoResult {
-  const _VideoResult(this.thumb, this.date, this.title, this.avatar,
-      this.username, this.likes, this.isMostLiked);
-  final String thumb, date, title, avatar, username;
-  final int likes;
-  final bool isMostLiked;
-}
-
-class _VideoCard extends StatelessWidget {
-  const _VideoCard({required this.video});
-  final _VideoResult video;
-
-  String _fmtLikes(int n) {
-    if (n >= 1000000) return '${(n / 1000000).toStringAsFixed(1)}M';
-    if (n >= 1000) return '${(n / 1000).toStringAsFixed(0)}K';
-    return '$n';
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.all(2),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Thumbnail
-          AspectRatio(
-            aspectRatio: 9 / 16,
-            child: ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Stack(
-                fit: StackFit.expand,
-                children: [
-                  CachedNetworkImage(
-                    imageUrl: video.thumb,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) =>
-                        Container(color: Colors.grey.shade300),
-                  ),
-                  if (video.isMostLiked)
-                    Positioned(
-                      top: 8,
-                      right: 8,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 3),
-                        decoration: BoxDecoration(
-                          color: Colors.black54,
-                          borderRadius: BorderRadius.circular(4),
-                        ),
-                        child: const Text(
-                          'Les plus aimées',
-                          style: TextStyle(
-                            color: Colors.white,
-                            fontSize: 10,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  Positioned(
-                    bottom: 6,
-                    left: 6,
-                    right: 6,
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          video.date,
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 11,
-                            fontWeight: FontWeight.w500,
-                            shadows: [
-                              Shadow(blurRadius: 4, color: Colors.black)
-                            ],
-                          ),
-                        ),
-                        const Icon(Icons.volume_off_rounded,
-                            color: Colors.white, size: 14),
-                      ],
-                    ),
-                  ),
+        Row(
+          children: [
+            Expanded(
+              child: TabBar(
+                controller: _tabs,
+                isScrollable: true,
+                tabAlignment: TabAlignment.start,
+                tabs: const [
+                  Tab(text: 'Top'),
+                  Tab(text: 'Vidéos'),
+                  Tab(text: 'Utilisateurs'),
+                  Tab(text: 'Sons'),
+                  Tab(text: 'Hashtags'),
                 ],
               ),
             ),
-          ),
-          const SizedBox(height: 4),
-          // Title
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Text(
-              video.title,
-              style: const TextStyle(
-                  color: Colors.black, fontSize: 12, height: 1.3),
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+            Pressable(
+              scale: 0.9,
+              onTap: () => showSearchFiltersSheet(context),
+              semanticLabel: 'Filtres de recherche',
+              child: const Padding(
+                padding: EdgeInsets.symmetric(horizontal: space12),
+                child: ReelIcon(
+                  ReelGlyph.settings,
+                  size: 20,
+                  color: colorTextSecondary,
+                ),
+              ),
             ),
-          ),
-          const SizedBox(height: 4),
-          // Avatar + username + likes
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 2),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 9,
-                  backgroundImage: NetworkImage(video.avatar),
-                ),
-                const SizedBox(width: 4),
-                Expanded(
-                  child: Text(
-                    video.username,
-                    style: const TextStyle(
-                      color: Color(0xFF8A8A8A),
-                      fontSize: 11,
-                    ),
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                const Icon(Icons.favorite_border_rounded,
-                    size: 11, color: Color(0xFF8A8A8A)),
-                const SizedBox(width: 2),
-                Text(
-                  _fmtLikes(video.likes),
-                  style: const TextStyle(
-                      color: Color(0xFF8A8A8A), fontSize: 11),
-                ),
-              ],
+          ],
+        ),
+        const Divider(height: 0.5),
+        Expanded(
+          child: resultsAsync.when(
+            loading: () => const _ResultsSkeleton(),
+            error: (error, _) => _ResultsError(
+              message: error.toString(),
+              onRetry: () =>
+                  ref.invalidate(searchResultsProvider(widget.query)),
             ),
+            data: (results) {
+              if (results.isEmpty) {
+                return _ResultsEmpty(query: widget.query);
+              }
+              final sorted = results.sorted(sort);
+              return TabBarView(
+                controller: _tabs,
+                children: [
+                  _TopTab(results: sorted),
+                  _VideosGrid(videos: sorted.videos),
+                  _UsersList(users: sorted.users),
+                  _SoundsList(sounds: sorted.sounds),
+                  _TagsList(tags: sorted.hashtags),
+                ],
+              );
+            },
           ),
-          const SizedBox(height: 8),
-        ],
-      ),
-    );
-  }
-}
-
-// ─── Videos tab ──────────────────────────────────────────────────────────────
-class _VideosTab extends StatelessWidget {
-  const _VideosTab({required this.query});
-  final String query;
-
-  static final _videos = [
-    _VideoResult(
-      'https://picsum.photos/seed/vid1/400/700',
-      '23/5',
-      'Flex up, stretch out big bands! Her waterbend...',
-      'https://i.pravatar.cc/150?img=20',
-      'kasacx',
-      162500,
-      false,
-    ),
-    _VideoResult(
-      'https://picsum.photos/seed/vid2/400/700',
-      '19/6',
-      'Oh, you stretch your big stretcher. New Spider-...',
-      'https://i.pravatar.cc/150?img=21',
-      'Kyro',
-      289400,
-      true,
-    ),
-    _VideoResult(
-      'https://picsum.photos/seed/vid3/400/700',
-      '3/4',
-      'Bro standing on business 😂',
-      'https://i.pravatar.cc/150?img=22',
-      'big_vibes',
-      45000,
-      false,
-    ),
-    _VideoResult(
-      'https://picsum.photos/seed/vid4/400/700',
-      '12/5',
-      'Un autre big moment incroyable à voir',
-      'https://i.pravatar.cc/150?img=23',
-      'moment_king',
-      89000,
-      false,
-    ),
-  ];
-
-  @override
-  Widget build(BuildContext context) {
-    return ListView(
-      padding: const EdgeInsets.all(2),
-      children: [
-        // "Suivis" separator if needed
-        _VideoGrid2Col(videos: _videos),
+        ),
       ],
     );
   }
 }
 
-// ─── Users tab ───────────────────────────────────────────────────────────────
-class _UsersTab extends StatelessWidget {
-  const _UsersTab({required this.query});
-  final String query;
+// ─────────────────────────────────────────────────────────────────────────────
+// Tabs content
+// ─────────────────────────────────────────────────────────────────────────────
 
-  static final _users = [
-    _UserResult('https://i.pravatar.cc/150?img=11', 'big_peeramon',
-        'big', '349,0K abonnés · 761 vidéos', false),
-    _UserResult('https://i.pravatar.cc/150?img=12', 'therealsemajlesley',
-        'BIG', '362,9K abonnés · 212 vidéos', false),
-    _UserResult('https://i.pravatar.cc/150?img=13', 'etie468',
-        'BIG', '414,3K abonnés · 209 vidéos', false),
-    _UserResult('https://i.pravatar.cc/150?img=14', 'bigbang_2xx6',
-        'BIGBANG', '430,3K abonnés · 6 vidéos', true),
-    _UserResult('https://i.pravatar.cc/150?img=15', 'acervosdabig',
-        'Big', '26,5K abonnés · 109 vidéos', false),
-    _UserResult('https://i.pravatar.cc/150?img=16', 'bipasa205',
-        'big', '162,8K abonnés · 0 vidéo', false),
-    _UserResult('https://i.pravatar.cc/150?img=17', 'drz013_',
-        'Big!', '33,3K abonnés · 263 vidéos', false),
-    _UserResult('https://i.pravatar.cc/150?img=18', 'big35_5',
-        'BiG', '18,9K abonnés · 51 vidéos', false, isPrivate: true),
-  ];
+class _TopTab extends StatelessWidget {
+  const _TopTab({required this.results});
+
+  final SearchResults results;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.separated(
-      itemCount: _users.length,
-      separatorBuilder: (_, __) =>
-          const Divider(height: 1, color: AppTokens.colorDividerLight),
-      itemBuilder: (context, i) => _UserTile(user: _users[i]),
+    return ListView(
+      padding: const EdgeInsets.only(bottom: space32),
+      children: [
+        if (results.users.isNotEmpty) ...[
+          const _SectionTitle('Créateurs'),
+          _CreatorsRow(users: results.users.take(8).toList()),
+        ],
+        if (results.videos.isNotEmpty) ...[
+          const _SectionTitle('Vidéos populaires'),
+          _VideosGrid(
+            videos: results.videos.take(9).toList(),
+            shrinkWrap: true,
+          ),
+        ],
+        if (results.hashtags.isNotEmpty) ...[
+          const _SectionTitle('Hashtags'),
+          for (final tag in results.hashtags.take(5))
+            _TagTile(tag: tag),
+        ],
+      ],
     );
   }
 }
 
-class _UserResult {
-  const _UserResult(this.avatar, this.username, this.displayName,
-      this.subtitle, this.verified,
-      {this.isPrivate = false});
-  final String avatar, username, displayName, subtitle;
-  final bool verified, isPrivate;
-}
+class _VideosGrid extends StatelessWidget {
+  const _VideosGrid({required this.videos, this.shrinkWrap = false});
 
-class _UserTile extends StatelessWidget {
-  const _UserTile({required this.user});
-  final _UserResult user;
+  final List<FeedItem> videos;
+  final bool shrinkWrap;
 
   @override
   Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-      child: Row(
+    if (videos.isEmpty) {
+      return const _InlineEmpty(
+        icon: ReelGlyph.play,
+        message: 'Aucune vidéo pour cette recherche',
+      );
+    }
+
+    return GridView.builder(
+      padding: const EdgeInsets.all(space2),
+      shrinkWrap: shrinkWrap,
+      physics: shrinkWrap
+          ? const NeverScrollableScrollPhysics()
+          : const AlwaysScrollableScrollPhysics(),
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 3,
+        crossAxisSpacing: AppTokens.gridGap,
+        mainAxisSpacing: AppTokens.gridGap,
+        childAspectRatio: 9 / 16,
+      ),
+      itemCount: videos.length,
+      itemBuilder: (context, index) => _VideoTile(video: videos[index]),
+    );
+  }
+}
+
+class _VideoTile extends StatelessWidget {
+  const _VideoTile({required this.video});
+
+  final FeedItem video;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.97,
+      onTap: () => showItemSheet(context, item: video),
+      semanticLabel: video.title,
+      child: Stack(
+        fit: StackFit.expand,
         children: [
-          CircleAvatar(
-            radius: 26,
-            backgroundImage: NetworkImage(user.avatar),
+          VideoThumbnail(
+            url: video.thumbnailUrl,
+            radius: radiusSm,
+            showPlayIcon: false,
           ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          Positioned(
+            left: space4,
+            bottom: space4,
+            child: Row(
               children: [
-                Row(
-                  children: [
-                    Text(
-                      user.username,
-                      style: const TextStyle(
-                        color: Colors.black,
-                        fontSize: 14,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (user.verified) ...[
-                      const SizedBox(width: 4),
-                      const Icon(Icons.verified_rounded,
-                          color: AppTokens.colorVerified, size: 14),
-                    ],
-                    if (user.isPrivate) ...[
-                      const SizedBox(width: 4),
-                      const Text(
-                        '· Privé',
-                        style: TextStyle(
-                            color: Color(0xFF8A8A8A), fontSize: 13),
-                      ),
-                    ],
-                  ],
+                const ReelIcon(
+                  ReelGlyph.play,
+                  size: 10,
+                  color: Colors.white,
                 ),
-                const SizedBox(height: 2),
+                const SizedBox(width: 2),
                 Text(
-                  user.displayName,
-                  style: const TextStyle(
-                      color: Color(0xFF8A8A8A), fontSize: 12),
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  user.subtitle,
-                  style: const TextStyle(
-                      color: Color(0xFF8A8A8A), fontSize: 11),
+                  formatCount(video.likes),
+                  style: AppTokens.caption.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w600,
+                    shadows: AppTokens.feedTextShadow,
+                  ),
                 ),
               ],
-            ),
-          ),
-          const SizedBox(width: 8),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
-            decoration: BoxDecoration(
-              color: const Color(0xFFFE2C55),
-              borderRadius: BorderRadius.circular(4),
-            ),
-            child: const Text(
-              'Suivre',
-              style: TextStyle(
-                color: Colors.white,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
             ),
           ),
         ],
@@ -492,89 +221,281 @@ class _UserTile extends StatelessWidget {
   }
 }
 
-// ─── Sounds tab ───────────────────────────────────────────────────────────────
-class _SoundsTab extends StatelessWidget {
-  const _SoundsTab();
+class _CreatorsRow extends StatelessWidget {
+  const _CreatorsRow({required this.users});
+
+  final List<SearchUser> users;
 
   @override
   Widget build(BuildContext context) {
-    return ListView.builder(
-      itemCount: 8,
-      itemBuilder: (context, i) => ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppTokens.colorBgLightSurface,
-            borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-          ),
-          child: const Icon(Icons.music_note_rounded,
-              color: AppTokens.colorTextSecondaryDark),
-        ),
-        title: Text('Son tendance ${i + 1}',
-            style: const TextStyle(
-                color: Colors.black,
-                fontSize: 14,
-                fontWeight: FontWeight.w600)),
-        subtitle: Text(
-            'Artiste ${i + 1} · ${(i + 1) * 12}K vidéos',
-            style: const TextStyle(
-                color: Color(0xFF8A8A8A), fontSize: 12)),
-        trailing: const Icon(Icons.play_circle_outline_rounded,
-            color: Color(0xFF8A8A8A)),
+    return SizedBox(
+      height: 104,
+      child: ListView.separated(
+        scrollDirection: Axis.horizontal,
+        padding: const EdgeInsets.symmetric(horizontal: gutter),
+        itemCount: users.length,
+        separatorBuilder: (_, __) => const SizedBox(width: space16),
+        itemBuilder: (context, index) {
+          final user = users[index];
+          return SizedBox(
+            width: 76,
+            child: Column(
+              children: [
+                ReelAvatar(
+                  url: user.avatar,
+                  name: user.username,
+                  size: 62,
+                  showVerified: user.verified,
+                ),
+                const SizedBox(height: space8),
+                Text(
+                  user.username,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  textAlign: TextAlign.center,
+                  style: AppTokens.labelS.copyWith(color: colorTextPrimary),
+                ),
+                Text(
+                  countLabel(user.videos, 'vidéo'),
+                  maxLines: 1,
+                  style: AppTokens.caption.copyWith(
+                    color: colorTextSecondaryDark,
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
 }
 
-// ─── LIVE tab ─────────────────────────────────────────────────────────────────
-class _LiveTab extends StatelessWidget {
-  const _LiveTab();
+class _UsersList extends StatelessWidget {
+  const _UsersList({required this.users});
+
+  final List<SearchUser> users;
 
   @override
   Widget build(BuildContext context) {
-    return GridView.builder(
-      padding: const EdgeInsets.all(4),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 4,
-        mainAxisSpacing: 4,
-        childAspectRatio: 9 / 14,
-      ),
-      itemCount: 6,
-      itemBuilder: (context, i) => ClipRRect(
-        borderRadius: BorderRadius.circular(AppTokens.radiusMd),
-        child: Stack(
-          fit: StackFit.expand,
-          children: [
-            CachedNetworkImage(
-              imageUrl: 'https://picsum.photos/seed/live$i/400/700',
-              fit: BoxFit.cover,
-            ),
-            Positioned(
-              top: 8,
-              left: 8,
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: AppTokens.colorLiveRed,
-                  borderRadius: BorderRadius.circular(4),
-                ),
-                child: const Text('LIVE',
-                    style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 10,
-                        fontWeight: FontWeight.w800)),
+    if (users.isEmpty) {
+      return const _InlineEmpty(
+        icon: ReelGlyph.profile,
+        message: 'Aucun utilisateur trouvé',
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: space8),
+      itemCount: users.length,
+      separatorBuilder: (_, __) => const SizedBox(height: space4),
+      itemBuilder: (context, index) {
+        final user = users[index];
+        return Padding(
+          padding: const EdgeInsets.symmetric(
+            horizontal: gutter,
+            vertical: space8,
+          ),
+          child: Row(
+            children: [
+              ReelAvatar(
+                url: user.avatar,
+                name: user.username,
+                size: 48,
+                showVerified: user.verified,
               ),
+              const SizedBox(width: space12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      user.username,
+                      style: AppTokens.titleS.copyWith(
+                        color: colorTextPrimary,
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      '${countLabel(user.videos, 'vidéo')} · ${formatCount(user.videos * 1200)} vues',
+                      style: AppTokens.labelS.copyWith(
+                        color: colorTextSecondaryDark,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const FollowButton(compact: true),
+            ],
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _SoundsList extends StatelessWidget {
+  const _SoundsList({required this.sounds});
+
+  final List<SearchSound> sounds;
+
+  @override
+  Widget build(BuildContext context) {
+    if (sounds.isEmpty) {
+      return const _InlineEmpty(
+        icon: ReelGlyph.music,
+        message: 'Aucun son trouvé',
+      );
+    }
+    return ListView.separated(
+      padding: const EdgeInsets.symmetric(vertical: space8),
+      itemCount: sounds.length,
+      separatorBuilder: (_, __) => const SizedBox(height: space4),
+      itemBuilder: (context, index) {
+        final sound = sounds[index];
+        return ListTile(
+          contentPadding: const EdgeInsets.symmetric(horizontal: gutter),
+          leading: Container(
+            width: 48,
+            height: 48,
+            decoration: BoxDecoration(
+              color: colorBgElevated,
+              borderRadius: BorderRadius.circular(radiusMd),
             ),
-            Positioned(
-              bottom: 8,
-              left: 8,
-              child: Text('${(i + 1) * 1200} spectateurs',
-                  style: const TextStyle(
-                      color: Colors.white,
-                      fontSize: 11,
-                      shadows: [Shadow(blurRadius: 4, color: Colors.black)])),
+            child: const Center(
+              child: ReelIcon(ReelGlyph.music, size: 22),
+            ),
+          ),
+          title: Text(
+            sound.name,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
+            style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+          ),
+          subtitle: Text(
+            countLabel(sound.uses, 'vidéo'),
+            style: AppTokens.labelS.copyWith(color: colorTextSecondaryDark),
+          ),
+          trailing: const ReelIcon(
+            ReelGlyph.play,
+            size: 18,
+            color: colorTextSecondary,
+          ),
+          onTap: () => showReelToast(
+            context,
+            sound.name,
+            icon: ReelGlyph.music,
+          ),
+        );
+      },
+    );
+  }
+}
+
+class _TagsList extends StatelessWidget {
+  const _TagsList({required this.tags});
+
+  final List<SearchTag> tags;
+
+  @override
+  Widget build(BuildContext context) {
+    if (tags.isEmpty) {
+      return const _InlineEmpty(
+        icon: ReelGlyph.trend,
+        message: 'Aucun hashtag trouvé',
+      );
+    }
+    return ListView(
+      padding: const EdgeInsets.symmetric(vertical: space8),
+      children: [for (final tag in tags) _TagTile(tag: tag)],
+    );
+  }
+}
+
+class _TagTile extends StatelessWidget {
+  const _TagTile({required this.tag});
+
+  final SearchTag tag;
+
+  @override
+  Widget build(BuildContext context) {
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: gutter),
+      leading: Container(
+        width: 48,
+        height: 48,
+        decoration: const BoxDecoration(
+          color: colorBgElevated,
+          shape: BoxShape.circle,
+        ),
+        child: const Center(
+          child: Text(
+            '#',
+            style: TextStyle(
+              color: colorTextPrimary,
+              fontSize: 20,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+      ),
+      title: Text(
+        '#${tag.tag}',
+        style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+      ),
+      subtitle: Text(
+        countLabel(tag.videos, 'vidéo'),
+        style: AppTokens.labelS.copyWith(color: colorTextSecondaryDark),
+      ),
+      trailing: const ReelIcon(
+        ReelGlyph.chevronRight,
+        size: 16,
+        color: colorTextSecondaryDark,
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shared bits
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.title);
+
+  final String title;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(gutter, space20, gutter, space12),
+      child: Text(
+        title,
+        style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+      ),
+    );
+  }
+}
+
+class _InlineEmpty extends StatelessWidget {
+  const _InlineEmpty({required this.icon, required this.message});
+
+  final ReelGlyph icon;
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(space32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ReelIcon(icon, size: 36, color: colorTextSecondaryDark),
+            const SizedBox(height: space12),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
             ),
           ],
         ),
@@ -583,45 +504,120 @@ class _LiveTab extends StatelessWidget {
   }
 }
 
-// ─── Hashtags tab ─────────────────────────────────────────────────────────────
-class _HashtagsTab extends StatelessWidget {
-  const _HashtagsTab({required this.query});
+class _ResultsEmpty extends StatelessWidget {
+  const _ResultsEmpty({required this.query});
+
   final String query;
 
   @override
   Widget build(BuildContext context) {
-    final tags = [
-      '#$query', '#${query}dance', '#${query}food',
-      '#${query}travel', '#${query}viral', '#${query}fyp',
-    ];
-    return ListView.separated(
-      itemCount: tags.length,
-      separatorBuilder: (_, __) =>
-          const Divider(height: 1, color: AppTokens.colorDividerLight),
-      itemBuilder: (context, i) => ListTile(
-        leading: Container(
-          width: 48,
-          height: 48,
-          decoration: BoxDecoration(
-            color: AppTokens.colorBgLightSurface,
-            shape: BoxShape.circle,
-          ),
-          child: Center(
-            child: Text('#',
-                style: const TextStyle(
-                    color: Colors.black,
-                    fontSize: 18,
-                    fontWeight: FontWeight.w700)),
-          ),
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(space32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: 64,
+              height: 64,
+              decoration: const BoxDecoration(
+                color: colorBgElevated,
+                shape: BoxShape.circle,
+              ),
+              child: const Center(
+                child: ReelIcon(
+                  ReelGlyph.search,
+                  size: 28,
+                  color: colorTextSecondary,
+                ),
+              ),
+            ),
+            const SizedBox(height: space16),
+            Text(
+              'Aucun résultat pour « $query »',
+              textAlign: TextAlign.center,
+              style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+            ),
+            const SizedBox(height: space6),
+            Text(
+              'Essaie un autre mot-clé ou vérifie la source active.',
+              textAlign: TextAlign.center,
+              style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
+            ),
+          ],
         ),
-        title: Text(tags[i],
-            style: const TextStyle(
-                color: Colors.black,
-                fontSize: 14,
-                fontWeight: FontWeight.w700)),
-        trailing: Text('${(i + 1) * 89}M vues',
-            style: const TextStyle(
-                color: Color(0xFF8A8A8A), fontSize: 12)),
+      ),
+    );
+  }
+}
+
+class _ResultsError extends StatelessWidget {
+  const _ResultsError({required this.message, required this.onRetry});
+
+  final String message;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(space32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const ReelIcon(
+              ReelGlyph.warning,
+              size: 32,
+              color: colorWarning,
+            ),
+            const SizedBox(height: space16),
+            Text(
+              'Recherche indisponible',
+              style: AppTokens.titleS.copyWith(color: colorTextPrimary),
+            ),
+            const SizedBox(height: space6),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
+            ),
+            const SizedBox(height: space20),
+            OutlinedButton(
+              onPressed: onRetry,
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: colorDivider),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(radiusMd),
+                ),
+              ),
+              child: Text(
+                'Réessayer',
+                style: AppTokens.labelM.copyWith(color: colorTextPrimary),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ResultsSkeleton extends StatelessWidget {
+  const _ResultsSkeleton();
+
+  @override
+  Widget build(BuildContext context) {
+    return Shimmer(
+      child: GridView.builder(
+        padding: const EdgeInsets.all(space2),
+        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+          crossAxisCount: 3,
+          crossAxisSpacing: AppTokens.gridGap,
+          mainAxisSpacing: AppTokens.gridGap,
+          childAspectRatio: 9 / 16,
+        ),
+        itemCount: 9,
+        itemBuilder: (_, __) => const SkeletonBox(radius: radiusSm),
       ),
     );
   }
