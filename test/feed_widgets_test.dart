@@ -4,7 +4,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:reel/core/icons/reel_icons.dart';
 import 'package:reel/core/theme/tokens.dart';
 import 'package:reel/core/widgets/reel_bottom_nav.dart';
-import 'package:reel/features/feed/demo_feed.dart';
+import 'fixtures/feed_fixture.dart';
 import 'package:reel/features/feed/providers/engagement_provider.dart';
 import 'package:reel/features/feed/widgets/feed_overlay_bottom.dart';
 import 'package:reel/features/feed/widgets/feed_page.dart';
@@ -26,7 +26,7 @@ void main() {
 
   testWidgets('feed page renders author, description and counters',
       (tester) async {
-    final item = demoFeedItems.first;
+    final item = fixtureFeedItems.first;
     await tester.pumpWidget(_wrap(FeedPage(
       item: item,
       isActive: true,

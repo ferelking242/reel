@@ -139,7 +139,6 @@ final activityProvider = Provider<List<ActivityEntry>>((ref) {
 
 /// System entries: onboarding and server state.
 final systemMessagesProvider = Provider<List<ActivityEntry>>((ref) {
-  final demo = ref.watch(demoModeProvider);
   final status = ref.watch(serverStatusProvider);
 
   return [
@@ -154,7 +153,7 @@ final systemMessagesProvider = Provider<List<ActivityEntry>>((ref) {
     ActivityEntry(
       id: 'system-server',
       kind: ActivityKind.system,
-      title: demo ? 'Mode démo actif' : 'État du serveur',
+      title: 'État du serveur',
       subtitle: status ?? 'Aucun serveur connecté pour le moment.',
       time: DateTime.now().subtract(const Duration(hours: 2)),
     ),

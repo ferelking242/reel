@@ -30,10 +30,11 @@ et servent de référence visuelle.
 - **Amis** : créateurs du feed, suggestions et abonnements, recherche locale.
 - **Boîte de réception** : activité réelle (likes, favoris, abonnements, commentaires)
   plus messages système, avec compteur non-lu persistant.
-- **Profil** : grille des vidéos, favoris et likes, réglages (démo, son, effacement des
-  données locales, serveur).
-- **Premier lancement** : sans serveur configuré, l'app ouvre le mode démo pour que
-  l'interface ne soit jamais vide. Un bandeau mène à l'écran de connexion.
+- **Profil** : avatar, bio, la triade TikTok (abonnements, abonnés, j'aime), onglets
+  vidéos / favoris / j'aime et réglages (son, effacement des données locales, serveur).
+- **Aucune donnée factice** : l'app ne contient plus de mode démo ni de jeu de
+  démonstration. Sans serveur, chaque écran affiche un état vide explicite qui mène
+  à l'écran de connexion ; la recherche s'appuie sur les vidéos déjà chargées.
 
 ## Architecture
 
@@ -41,6 +42,7 @@ et servent de référence visuelle.
 lib/
 ├── main.dart / app.dart / shell.dart / splash_screen.dart
 ├── core/
+│   ├── contract/                 ← Contrat d'interface (dock, écrans, lecteur)
 │   ├── icons/reel_icons.dart     ← Jeu d'icônes vectorielles maison (grille 24 dp)
 │   ├── theme/tokens.dart         ← Couleurs, espacements, durées, courbes
 │   ├── utils/formatters.dart     ← Compteurs, dates relatives, tailles
@@ -57,6 +59,37 @@ lib/
 ├── router/router.dart            ← Navigation (go_router)
 └── utils/log/                    ← Logger fichier
 ```
+
+### Contrat d'interface
+
+`assets/contract.json` décrit l'interface comme le font les `ui-layouts/*.json` de
+[watchtower-extensions](https://github.com/ferelking242/watchtower-extensions), avec
+deux sections supplémentaires : le shell (dock) et le lecteur.
+
+```jsonc
+{
+  "schemaVersion": 1,
+  "shell": {
+    "dock": {
+      "enabled": true,
+      "type": "bar",              // bar | centered | floating | edgeToEdge
+      "labels": "icon+label",     // icon | icon+label
+      "activeIndicator": "fill",  // fill | dot | underline | none
+      "elevation": "border",      // none | border | shadow | blur
+      "height": 52, "margin": 16, "cornerRadius": 999,
+      "haptics": true, "transparentOnFeed": true,
+      "items": [{ "id": "home", "label": "Accueil", "icon": "home", "route": "/" }]
+    }
+  },
+  "screens": { "feed": { }, "search": { }, "live": { }, "profile": { } },
+  "player": { "mode": "feed" }
+}
+```
+
+`lib/core/contract/` charge le fichier et retombe sur `UiContract.fallback` s'il est
+absent ou invalide : le dock, ses libellés, son indicateur actif et ses haptiques sont
+donc pilotés par le contrat sans risque de démarrage cassé. Un test
+(`test/contract_test.dart`) vérifie le fichier livré et le rendu des variantes.
 
 ### Typographie
 

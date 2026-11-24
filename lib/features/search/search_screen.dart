@@ -347,7 +347,7 @@ class _SuggestionsView extends ConsumerWidget {
           Padding(
             padding: const EdgeInsets.all(space32),
             child: Text(
-              'Connecte un serveur ou active le mode démo pour voir les tendances.',
+              'Connecte un serveur Watchtower pour voir les tendances.',
               textAlign: TextAlign.center,
               style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
             ),

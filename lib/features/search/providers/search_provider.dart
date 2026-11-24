@@ -183,6 +183,10 @@ final searchResultsProvider =
 
   final client = ref.watch(remoteClientProvider);
   if (client == null) {
+    // Sans serveur, on cherche dans les vidéos déjà chargées : ce sont de
+    // vraies données, pas un jeu de démonstration.
+    final local = _localMatches(ref.watch(feedItemsProvider).value ?? const [], query);
+    if (local.isNotEmpty) return _resultsFrom(query, 'Feed chargé', local);
     throw const SearchUnavailable(
       'Aucun serveur configuré — connecte-toi pour rechercher.',
     );
@@ -209,15 +213,30 @@ final searchResultsProvider =
       ),
   ];
 
+  return _resultsFrom(query, source.name, videos);
+});
+
+SearchResults _resultsFrom(String query, String sourceName, List<FeedItem> videos) {
   return SearchResults(
     query: query,
-    sourceName: source.name,
+    sourceName: sourceName,
     videos: videos,
     users: _usersFrom(videos),
     hashtags: _tagsFrom(videos),
     sounds: _soundsFrom(videos),
   );
-});
+}
+
+List<FeedItem> _localMatches(List<FeedItem> items, String query) {
+  final needle = query.toLowerCase();
+  return items
+      .where((item) =>
+          item.title.toLowerCase().contains(needle) ||
+          item.authorUsername.toLowerCase().contains(needle) ||
+          item.soundName.toLowerCase().contains(needle) ||
+          item.hashtags.any((tag) => tag.toLowerCase().contains(needle)))
+      .toList(growable: false);
+}
 
 class SearchUnavailable implements Exception {
   const SearchUnavailable(this.message);

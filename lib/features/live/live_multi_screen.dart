@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/icons/reel_icons.dart';
 import '../../core/theme/tokens.dart';
-import '../../core/utils/formatters.dart';
 import '../../core/widgets/live_badge.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/reel_avatar.dart';
@@ -15,16 +14,30 @@ import '../feed/providers/feed_provider.dart';
 
 /// « Direct » tab.
 ///
-/// The Watchtower API does not expose live streams yet, so this page previews
-/// the live layout with the creators already present in the feed and states
-/// clearly that nothing is actually streaming.
-class LiveMultiScreen extends ConsumerWidget {
+/// Watchtower does not expose live streams yet, so the page uses the creators
+/// of the current feed: their hashtags become the category rail and every tile
+/// opens an explanation instead of pretending a stream is running. No viewer
+/// count is invented — the API has none.
+class LiveMultiScreen extends ConsumerStatefulWidget {
   const LiveMultiScreen({super.key});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<LiveMultiScreen> createState() => _LiveMultiScreenState();
+}
+
+class _LiveMultiScreenState extends ConsumerState<LiveMultiScreen> {
+  String? _category;
+
+  @override
+  Widget build(BuildContext context) {
     final items = ref.watch(feedItemsProvider).asData?.value ?? const [];
     final creators = _uniqueCreators(items);
+    final categories = _categories(items);
+    final visible = _category == null
+        ? creators
+        : creators
+            .where((c) => c.hashtags.contains(_category))
+            .toList(growable: false);
 
     return Scaffold(
       backgroundColor: colorBgBase,
@@ -34,7 +47,7 @@ class LiveMultiScreen extends ConsumerWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Padding(
-              padding: const EdgeInsets.fromLTRB(space4, space4, gutter, 0),
+              padding: const EdgeInsets.fromLTRB(space4, space4, space8, 0),
               child: Row(
                 children: [
                   Pressable(
@@ -64,32 +77,47 @@ class LiveMultiScreen extends ConsumerWidget {
                   const SizedBox(width: space8),
                   const LiveBadge(compact: true),
                   const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: space8,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: colorBgCard,
-                      borderRadius: BorderRadius.circular(radiusPill),
-                    ),
-                    child: Text(
-                      'Aperçu',
-                      style: AppTokens.caption.copyWith(
-                        color: colorTextSecondaryDark,
+                  Pressable(
+                    scale: 0.88,
+                    onTap: () => context.push('/search'),
+                    semanticLabel: 'Rechercher un direct',
+                    child: const Padding(
+                      padding: EdgeInsets.all(space8),
+                      child: ReelIcon(
+                        ReelGlyph.search,
+                        size: 21,
+                        color: colorTextPrimary,
                       ),
                     ),
                   ),
                 ],
               ),
             ),
+            if (categories.isNotEmpty)
+              SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: gutter),
+                  itemCount: categories.length + 1,
+                  separatorBuilder: (_, __) => const SizedBox(width: space8),
+                  itemBuilder: (context, index) {
+                    final value = index == 0 ? null : categories[index - 1];
+                    return _CategoryChip(
+                      label: value == null ? 'Tout' : '#$value',
+                      selected: _category == value,
+                      onTap: () => setState(() => _category = value),
+                    );
+                  },
+                ),
+              ),
             Expanded(
-              child: creators.isEmpty
-                  ? const _LiveEmpty()
+              child: visible.isEmpty
+                  ? _LiveEmpty(hasFeed: creators.isNotEmpty)
                   : ListView(
                       padding: const EdgeInsets.only(bottom: space32),
                       children: [
-                        const _PreviewBanner(),
+                        const _ServerNotice(),
                         const SizedBox(height: space16),
                         Padding(
                           padding: const EdgeInsets.symmetric(
@@ -105,7 +133,7 @@ class LiveMultiScreen extends ConsumerWidget {
                               ),
                               const Spacer(),
                               Text(
-                                '${creators.length} créateurs',
+                                '${visible.length} créateurs',
                                 style: AppTokens.labelS.copyWith(
                                   color: colorTextSecondaryDark,
                                 ),
@@ -128,15 +156,9 @@ class LiveMultiScreen extends ConsumerWidget {
                               mainAxisSpacing: space10,
                               childAspectRatio: 0.82,
                             ),
-                            itemCount: creators.length > 4
-                                ? 4
-                                : creators.length,
+                            itemCount: visible.length > 4 ? 4 : visible.length,
                             itemBuilder: (context, index) {
-                              final creator = creators[index];
-                              return _LiveTile(
-                                item: creator,
-                                viewers: 1200 + index * 3400,
-                              );
+                              return _LiveTile(item: visible[index]);
                             },
                           ),
                         ),
@@ -208,10 +230,60 @@ class LiveMultiScreen extends ConsumerWidget {
     }
     return creators;
   }
+
+  List<String> _categories(List<FeedItem> items) {
+    final counts = <String, int>{};
+    for (final item in items) {
+      for (final tag in item.hashtags) {
+        counts.update(tag, (value) => value + 1, ifAbsent: () => 1);
+      }
+    }
+    final sorted = counts.entries.toList()
+      ..sort((a, b) => b.value.compareTo(a.value));
+    return sorted.take(6).map((entry) => entry.key).toList(growable: false);
+  }
 }
 
-class _PreviewBanner extends StatelessWidget {
-  const _PreviewBanner();
+class _CategoryChip extends StatelessWidget {
+  const _CategoryChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final String label;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.94,
+      onTap: onTap,
+      semanticLabel: label,
+      child: Container(
+        padding: const EdgeInsets.symmetric(
+          horizontal: space16,
+          vertical: space8,
+        ),
+        decoration: BoxDecoration(
+          color: selected ? colorTextPrimary : colorBgCard,
+          borderRadius: BorderRadius.circular(radiusPill),
+        ),
+        child: Text(
+          label,
+          style: AppTokens.labelM.copyWith(
+            color: selected ? colorBgBase : colorTextSecondary,
+            fontWeight: selected ? FontWeight.w700 : FontWeight.w500,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _ServerNotice extends StatelessWidget {
+  const _ServerNotice();
 
   @override
   Widget build(BuildContext context) {
@@ -225,15 +297,11 @@ class _PreviewBanner extends StatelessWidget {
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const ReelIcon(
-            ReelGlyph.warning,
-            size: 16,
-            color: colorWarning,
-          ),
+          const ReelIcon(ReelGlyph.warning, size: 16, color: colorWarning),
           const SizedBox(width: space10),
           Expanded(
             child: Text(
-              'Aperçu de l\'interface : l\'API Watchtower ne fournit pas encore de flux en direct.',
+              'L\'API Watchtower n\'expose pas encore de flux en direct : les tuiles ci-dessous présentent les créateurs du feed.',
               style: AppTokens.labelS.copyWith(
                 color: colorTextSecondary,
                 height: 1.4,
@@ -247,10 +315,9 @@ class _PreviewBanner extends StatelessWidget {
 }
 
 class _LiveTile extends StatelessWidget {
-  const _LiveTile({required this.item, required this.viewers});
+  const _LiveTile({required this.item});
 
   final FeedItem item;
-  final int viewers;
 
   @override
   Widget build(BuildContext context) {
@@ -283,42 +350,10 @@ class _LiveTile extends StatelessWidget {
                 ),
               ),
             ),
-            Positioned(
+            const Positioned(
               top: space8,
               left: space8,
-              child: Row(
-                children: [
-                  const LiveBadge(compact: true),
-                  const SizedBox(width: space6),
-                  Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: space6,
-                      vertical: 2,
-                    ),
-                    decoration: BoxDecoration(
-                      color: const Color(0x99000000),
-                      borderRadius: BorderRadius.circular(radiusSm),
-                    ),
-                    child: Row(
-                      children: [
-                        const ReelIcon(
-                          ReelGlyph.profile,
-                          size: 9,
-                          color: Colors.white,
-                        ),
-                        const SizedBox(width: 2),
-                        Text(
-                          formatCount(viewers),
-                          style: AppTokens.caption.copyWith(
-                            color: Colors.white,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
+              child: LiveBadge(compact: true),
             ),
             Positioned(
               left: space8,
@@ -357,7 +392,9 @@ class _LiveTile extends StatelessWidget {
 }
 
 class _LiveEmpty extends StatelessWidget {
-  const _LiveEmpty();
+  const _LiveEmpty({required this.hasFeed});
+
+  final bool hasFeed;
 
   @override
   Widget build(BuildContext context) {
@@ -384,12 +421,15 @@ class _LiveEmpty extends StatelessWidget {
             ),
             const SizedBox(height: space20),
             Text(
-              'Aucun direct pour le moment',
+              hasFeed ? 'Aucun créateur dans cette catégorie' : 'Aucun direct pour le moment',
+              textAlign: TextAlign.center,
               style: AppTokens.titleS.copyWith(color: colorTextPrimary),
             ),
             const SizedBox(height: space8),
             Text(
-              'Charge le feed pour voir apparaître les créateurs ici.',
+              hasFeed
+                  ? 'Choisis une autre catégorie pour voir les créateurs du feed.'
+                  : 'Charge le feed pour voir apparaître les créateurs ici.',
               textAlign: TextAlign.center,
               style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
             ),

@@ -131,7 +131,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
             apiKey: _keyCtrl.text.trim(),
             selectedSourceId: _selectedSourceId ?? kDefaultSourceId,
           );
-      ref.read(demoModeProvider.notifier).disable();
       await ref.read(feedItemsProvider.notifier).refresh();
       if (!mounted) return;
       showReelToast(context, 'Serveur enregistré');
@@ -139,13 +138,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     } finally {
       if (mounted) setState(() => _saving = false);
     }
-  }
-
-  Future<void> _useDemo() async {
-    ref.read(demoModeProvider.notifier).enable();
-    await ref.read(feedItemsProvider.notifier).refresh();
-    if (!mounted) return;
-    _close();
   }
 
   void _close() {
@@ -335,8 +327,6 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
                           setState(() => _selectedSourceId = id),
                     ),
                   ],
-                  const SizedBox(height: space24),
-                  _DemoCard(onTap: _useDemo),
                   if (config?.isConfigured ?? false) ...[
                     const SizedBox(height: space20),
                     Center(
@@ -847,66 +837,3 @@ class _SourceIcon extends StatelessWidget {
   }
 }
 
-class _DemoCard extends StatelessWidget {
-  const _DemoCard({required this.onTap});
-
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    return Pressable(
-      scale: 0.98,
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.all(space16),
-        decoration: BoxDecoration(
-          color: colorBgCard,
-          borderRadius: BorderRadius.circular(radiusLg),
-        ),
-        child: Row(
-          children: [
-            Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                shape: BoxShape.circle,
-                color: colorBrandCyan.withValues(alpha: 0.14),
-              ),
-              child: const Center(
-                child: ReelIcon(
-                  ReelGlyph.play,
-                  size: 18,
-                  color: colorBrandCyan,
-                ),
-              ),
-            ),
-            const SizedBox(width: space12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    'Explorer sans serveur',
-                    style: AppTokens.bodyS.copyWith(color: colorTextPrimary),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    'Ouvre le mode démo avec du contenu local.',
-                    style: AppTokens.labelS.copyWith(
-                      color: colorTextSecondaryDark,
-                    ),
-                  ),
-                ],
-              ),
-            ),
-            const ReelIcon(
-              ReelGlyph.chevronRight,
-              size: 16,
-              color: colorTextSecondaryDark,
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}

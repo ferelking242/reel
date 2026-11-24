@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../remote/remote_client.dart';
 import '../../../remote/remote_config_provider.dart';
 import '../../../utils/log/app_file_logger.dart';
-import '../demo_feed.dart';
 import '../feed_mapping.dart';
 import '../models/feed_item.dart';
 
@@ -68,18 +67,6 @@ class _LoadingMoreNotifier extends Notifier<bool> {
 final loadingMoreProvider =
     NotifierProvider<_LoadingMoreNotifier, bool>(_LoadingMoreNotifier.new);
 
-/// When true the feed shows a local demo so the UI can be explored without a
-/// Watchtower server.
-class _DemoModeNotifier extends Notifier<bool> {
-  @override
-  bool build() => false;
-  void enable() => state = true;
-  void disable() => state = false;
-}
-
-final demoModeProvider =
-    NotifierProvider<_DemoModeNotifier, bool>(_DemoModeNotifier.new);
-
 // ─────────────────────────────────────────────────────────────────────────────
 // Feed items
 // ─────────────────────────────────────────────────────────────────────────────
@@ -102,22 +89,10 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   Future<List<FeedItem>> build() async {
     _reset();
 
-    if (ref.watch(demoModeProvider)) {
-      _scheduleStatus('Mode démo — contenu local');
-      return demoFeedItems;
-    }
-
     final client = ref.watch(remoteClientProvider);
     if (client == null) {
-      // First run: show the local demo so the interface is never empty.
-      _scheduleStatus('Aucun serveur configuré — mode démo');
-      Future.microtask(() {
-        if (!ref.mounted) return;
-        if (!ref.read(demoModeProvider)) {
-          ref.read(demoModeProvider.notifier).enable();
-        }
-      });
-      return demoFeedItems;
+      _scheduleStatus('Aucun serveur configuré');
+      return const [];
     }
 
     final config = await ref.read(remoteConfigProvider.future);

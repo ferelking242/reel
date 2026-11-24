@@ -67,7 +67,6 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     final feed = ref.watch(profileFeedItemsProvider);
     final saved = ref.watch(profileSavedItemsProvider);
     final liked = ref.watch(profileLikedItemsProvider);
-    final comments = ref.watch(profileCommentCountProvider);
 
     return Scaffold(
       backgroundColor: colorBgBase,
@@ -78,12 +77,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
             SliverToBoxAdapter(
               child: _ProfileHeader(
                 following: engagement.followed.length,
-                saved: saved.length,
+                followers: null,
                 liked: liked.length,
-                comments: comments,
                 onOpenSettings: () => _showSettings(context),
                 onOpenFriends: () => context.go('/friends'),
-                onOpenSaved: () => _goToTab(1),
                 onOpenLiked: () => _goToTab(2),
               ),
             ),
@@ -165,22 +162,21 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
 class _ProfileHeader extends ConsumerWidget {
   const _ProfileHeader({
     required this.following,
-    required this.saved,
+    required this.followers,
     required this.liked,
-    required this.comments,
     required this.onOpenSettings,
     required this.onOpenFriends,
-    required this.onOpenSaved,
     required this.onOpenLiked,
   });
 
   final int following;
-  final int saved;
+
+  /// Le serveur ne publie pas encore de compteur d'abonnés : `null` affiche
+  /// un tiret plutôt qu'un zéro trompeur.
+  final int? followers;
   final int liked;
-  final int comments;
   final VoidCallback onOpenSettings;
   final VoidCallback onOpenFriends;
-  final VoidCallback onOpenSaved;
   final VoidCallback onOpenLiked;
 
   @override
@@ -394,9 +390,9 @@ class _ProfileHeader extends ConsumerWidget {
             ),
             Expanded(
               child: _Stat(
-                value: saved,
-                label: 'Favoris',
-                onTap: onOpenSaved,
+                value: followers,
+                label: 'Abonnés',
+                onTap: onOpenFriends,
               ),
             ),
             Expanded(
@@ -404,13 +400,6 @@ class _ProfileHeader extends ConsumerWidget {
                 value: liked,
                 label: 'J\'aime',
                 onTap: onOpenLiked,
-              ),
-            ),
-            Expanded(
-              child: _Stat(
-                value: comments,
-                label: 'Commentaires',
-                onTap: onOpenSaved,
               ),
             ),
           ],
@@ -428,7 +417,7 @@ class _Stat extends StatelessWidget {
     required this.onTap,
   });
 
-  final int value;
+  final int? value;
   final String label;
   final VoidCallback onTap;
 
@@ -437,11 +426,11 @@ class _Stat extends StatelessWidget {
     return Pressable(
       scale: 0.94,
       onTap: onTap,
-      semanticLabel: '$label : $value',
+      semanticLabel: value == null ? label : '$label : $value',
       child: Column(
         children: [
           Text(
-            formatCount(value),
+            value == null ? '—' : formatCount(value!),
             style: AppTokens.titleM.copyWith(
               color: colorTextPrimary,
               fontSize: 17,
@@ -610,7 +599,6 @@ class _SettingsSheet extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final demo = ref.watch(demoModeProvider);
     final config = ref.watch(remoteConfigProvider).asData?.value;
     final muted = ref.watch(feedMutedProvider);
 
@@ -653,31 +641,6 @@ class _SettingsSheet extends ConsumerWidget {
           const SizedBox(height: space12),
           _SettingsGroup(
             children: [
-              SwitchListTile.adaptive(
-                value: demo,
-                onChanged: (value) {
-                  if (value) {
-                    ref.read(demoModeProvider.notifier).enable();
-                  } else {
-                    ref.read(demoModeProvider.notifier).disable();
-                  }
-                  ref.read(feedItemsProvider.notifier).refresh();
-                },
-                title: Text(
-                  'Mode démo',
-                  style: AppTokens.bodyS.copyWith(color: colorTextPrimary),
-                ),
-                subtitle: Text(
-                  'Affiche un feed local sans serveur',
-                  style: AppTokens.labelS.copyWith(
-                    color: colorTextSecondaryDark,
-                  ),
-                ),
-                activeTrackColor: colorBrand,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: space16,
-                ),
-              ),
               SwitchListTile.adaptive(
                 value: !muted,
                 onChanged: (_) => ref.read(feedMutedProvider.notifier).toggle(),

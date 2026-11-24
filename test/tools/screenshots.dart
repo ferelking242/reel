@@ -8,10 +8,13 @@ import 'package:reel/core/theme/tokens.dart';
 import 'package:reel/features/connect/connect_screen.dart';
 import 'package:reel/features/feed/feed_screen.dart';
 import 'package:reel/features/feed/providers/feed_provider.dart';
+
+import '../fixtures/feed_fixture.dart';
 import 'package:reel/features/friends/friends_screen.dart';
 import 'package:reel/features/inbox/inbox_screen.dart';
 import 'package:reel/features/live/live_multi_screen.dart';
 import 'package:reel/features/profile/profile_screen.dart';
+import 'package:reel/features/search/search_results_screen.dart';
 import 'package:reel/features/search/search_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
@@ -42,9 +45,10 @@ void main() {
     tester.view.physicalSize = _phone;
     tester.view.devicePixelRatio = 1;
 
-    final container = ProviderContainer();
+    final container = ProviderContainer(
+      overrides: [feedItemsProvider.overrideWith(FixtureFeedNotifier.new)],
+    );
     addTearDown(container.dispose);
-    container.read(demoModeProvider.notifier).enable();
 
     Future<void> pumpScreen(Widget screen, String name) async {
       await tester.pumpWidget(
@@ -76,5 +80,17 @@ void main() {
     await pumpScreen(const FriendsScreen(), '05_friends');
     await pumpScreen(const LiveMultiScreen(), '06_live');
     await pumpScreen(const ConnectScreen(), '07_connect');
+    await pumpScreen(
+      const Scaffold(
+        backgroundColor: colorBgBase,
+        body: SafeArea(
+          child: Padding(
+            padding: EdgeInsets.only(top: space8),
+            child: SearchResultsScreen(query: 'son'),
+          ),
+        ),
+      ),
+      '08_search_results',
+    );
   });
 }

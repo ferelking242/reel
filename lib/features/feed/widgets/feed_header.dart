@@ -20,9 +20,8 @@ class FeedHeader extends ConsumerWidget {
     final tab = ref.watch(feedTabProvider);
     final muted = ref.watch(feedMutedProvider);
     final status = ref.watch(serverStatusProvider);
-    final demo = ref.watch(demoModeProvider);
 
-    final showBanner = status != null && !status.startsWith('✓') && !demo;
+    final showBanner = status != null && !status.startsWith('✓');
 
     return Column(
       mainAxisSize: MainAxisSize.min,
@@ -100,7 +99,6 @@ class FeedHeader extends ConsumerWidget {
           ),
         ),
         if (showBanner) _StatusBanner(message: status),
-        if (demo) const _DemoBanner(),
       ],
     );
   }
@@ -215,42 +213,3 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
-class _DemoBanner extends StatelessWidget {
-  const _DemoBanner();
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(
-        horizontal: space16,
-        vertical: space6,
-      ),
-      color: const Color(0xB3000000),
-      child: Row(
-        children: [
-          const ReelIcon(ReelGlyph.effects, size: 14, color: colorBrandCyan),
-          const SizedBox(width: space8),
-          Expanded(
-            child: Text(
-              'Mode démo — contenu local',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTokens.labelS.copyWith(color: colorTextSecondary),
-            ),
-          ),
-          GestureDetector(
-            onTap: () => context.push('/connect'),
-            child: Text(
-              'Connecter',
-              style: AppTokens.labelM.copyWith(
-                color: colorBrandCyan,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}

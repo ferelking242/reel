@@ -1,13 +1,11 @@
-import 'models/feed_item.dart';
+import 'package:reel/features/feed/models/feed_item.dart';
+import 'package:reel/features/feed/providers/feed_provider.dart';
 
-/// Local content used by « Mode démo ».
-///
-/// It never touches the network: posters are generated gradients, so the whole
-/// interface (feed, sidebar, comments, sheets) can be explored before a
-/// Watchtower server is configured.
-final List<FeedItem> demoFeedItems = [
+/// Contenu de test : jamais livré dans l'app, uniquement injecté par les tests
+/// et les captures de référence via [feedItemsProvider.overrideWith].
+final List<FeedItem> fixtureFeedItems = [
   FeedItem(
-    id: 'demo-1',
+    id: 'fixture-1',
     videoUrl: '',
     thumbnailUrl: '',
     title: 'POV : tu retrouves ce son qui tournait en boucle cet été',
@@ -21,10 +19,9 @@ final List<FeedItem> demoFeedItems = [
     soundName: 'Son original — Studio Nova',
     authorVerified: true,
     createdAt: DateTime.now().subtract(const Duration(hours: 3)),
-    isDemo: true,
   ),
   FeedItem(
-    id: 'demo-2',
+    id: 'fixture-2',
     videoUrl: '',
     thumbnailUrl: '',
     title: 'Le geste technique que personne ne voit au ralenti',
@@ -37,10 +34,9 @@ final List<FeedItem> demoFeedItems = [
     hashtags: const ['sport', 'ralenti', 'technique'],
     soundName: 'Son original — Cadence',
     createdAt: DateTime.now().subtract(const Duration(hours: 9)),
-    isDemo: true,
   ),
   FeedItem(
-    id: 'demo-3',
+    id: 'fixture-3',
     videoUrl: '',
     thumbnailUrl: '',
     title: 'Recette en 30 secondes : la pâte qui ne rate jamais',
@@ -54,10 +50,9 @@ final List<FeedItem> demoFeedItems = [
     soundName: 'Cuisine — Mijoté',
     authorVerified: true,
     createdAt: DateTime.now().subtract(const Duration(days: 1)),
-    isDemo: true,
   ),
   FeedItem(
-    id: 'demo-4',
+    id: 'fixture-4',
     videoUrl: '',
     thumbnailUrl: '',
     title: 'Ce décor est fait entièrement à la main',
@@ -70,10 +65,9 @@ final List<FeedItem> demoFeedItems = [
     hashtags: const ['artisanat', 'bois', 'process'],
     soundName: 'Atelier — Bois & Co',
     createdAt: DateTime.now().subtract(const Duration(days: 2)),
-    isDemo: true,
   ),
   FeedItem(
-    id: 'demo-5',
+    id: 'fixture-5',
     videoUrl: '',
     thumbnailUrl: '',
     title: 'Trois secondes pour comprendre ce plan de coupe',
@@ -86,10 +80,9 @@ final List<FeedItem> demoFeedItems = [
     hashtags: const ['montage', 'cinema', 'astuce'],
     soundName: 'Son original — Montage Facile',
     createdAt: DateTime.now().subtract(const Duration(days: 3)),
-    isDemo: true,
   ),
   FeedItem(
-    id: 'demo-6',
+    id: 'fixture-6',
     videoUrl: '',
     thumbnailUrl: '',
     title: 'La vue depuis le toit, sans filtre',
@@ -103,6 +96,11 @@ final List<FeedItem> demoFeedItems = [
     soundName: 'Ambiance — Hors Carte',
     authorVerified: true,
     createdAt: DateTime.now().subtract(const Duration(days: 4)),
-    isDemo: true,
   ),
 ];
+
+/// Feed notifier that serves [fixtureFeedItems] without touching the network.
+class FixtureFeedNotifier extends FeedNotifier {
+  @override
+  Future<List<FeedItem>> build() async => fixtureFeedItems;
+}

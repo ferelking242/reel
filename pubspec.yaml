@@ -93,6 +93,8 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/contract.json
 
   # TikTok Sans — police officielle de TikTok, sous SIL Open Font License 1.1
   # (voir assets/fonts/OFL.txt). Instances statiques générées depuis la

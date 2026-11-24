@@ -110,6 +110,25 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
     }).toList(growable: false);
   }
 
+  Widget _bottomNav({bool transparent = false}) {
+    return ReelBottomNav(
+      currentIndex: 0,
+      transparent: transparent,
+      unreadCount: ref.watch(unreadInboxProvider),
+      onSelect: (index) {
+        switch (index) {
+          case 1:
+            context.push('/friends');
+          case 3:
+            context.push('/inbox');
+          case 4:
+            context.push('/profile');
+        }
+      },
+      onCreate: () => showCreateSheet(context),
+    );
+  }
+
   Future<void> _refresh() async {
     if (_refreshing) return;
     setState(() => _refreshing = true);
@@ -161,24 +180,33 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
         error: (error, _) => _FeedError(
           error: error,
           onRetry: _refresh,
-          onDemo: () {
-            ref.read(demoModeProvider.notifier).enable();
-            _refresh();
-          },
         ),
         data: (allItems) {
           final items = _visibleItems(allItems, tab, hidden);
           if (items.isEmpty) {
-            return _FeedEmpty(
-              tab: tab,
-              hasServerItems: allItems.isNotEmpty,
-              followedCount: engagement.followed.length,
-              onRetry: _refresh,
-              onDemo: () {
-                ref.read(demoModeProvider.notifier).enable();
-                _refresh();
-              },
-              onExplore: () => ref.read(feedTabProvider.notifier).update(0),
+            // Le bandeau « Pour toi / Suivis » reste visible : un feed vide ne
+            // doit pas faire disparaître la navigation principale.
+            return Scaffold(
+              backgroundColor: colorBgBase,
+              body: SafeArea(
+                bottom: false,
+                child: Column(
+                  children: [
+                    const FeedHeader(),
+                    Expanded(
+                      child: _FeedEmpty(
+                        tab: tab,
+                        hasServerItems: allItems.isNotEmpty,
+                        followedCount: engagement.followed.length,
+                        onRetry: _refresh,
+                        onExplore: () =>
+                            ref.read(feedTabProvider.notifier).update(0),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              bottomNavigationBar: _bottomNav(),
             );
           }
 
@@ -292,22 +320,7 @@ class _FeedScreenState extends ConsumerState<FeedScreen>
                   left: 0,
                   right: 0,
                   bottom: 0,
-                  child: ReelBottomNav(
-                    currentIndex: 0,
-                    transparent: true,
-                    unreadCount: ref.watch(unreadInboxProvider),
-                    onSelect: (index) {
-                      switch (index) {
-                        case 1:
-                          context.push('/friends');
-                        case 3:
-                          context.push('/inbox');
-                        case 4:
-                          context.push('/profile');
-                      }
-                    },
-                    onCreate: () => showCreateSheet(context),
-                  ),
+                  child: _bottomNav(transparent: true),
                 ),
               ],
             ),
@@ -517,12 +530,10 @@ class _FeedError extends StatefulWidget {
   const _FeedError({
     required this.error,
     required this.onRetry,
-    required this.onDemo,
   });
 
   final Object error;
   final VoidCallback onRetry;
-  final VoidCallback onDemo;
 
   @override
   State<_FeedError> createState() => _FeedErrorState();
@@ -624,17 +635,6 @@ class _FeedErrorState extends State<_FeedError> {
             ),
           ],
         ),
-        const SizedBox(height: space12),
-        TextButton(
-          onPressed: widget.onDemo,
-          child: Text(
-            'Explorer le mode démo',
-            style: AppTokens.labelM.copyWith(
-              color: colorBrandCyan,
-              fontWeight: FontWeight.w700,
-            ),
-          ),
-        ),
       ],
     );
   }
@@ -646,7 +646,6 @@ class _FeedEmpty extends StatelessWidget {
     required this.hasServerItems,
     required this.followedCount,
     required this.onRetry,
-    required this.onDemo,
     required this.onExplore,
   });
 
@@ -654,7 +653,6 @@ class _FeedEmpty extends StatelessWidget {
   final bool hasServerItems;
   final int followedCount;
   final VoidCallback onRetry;
-  final VoidCallback onDemo;
   final VoidCallback onExplore;
 
   @override
@@ -694,7 +692,7 @@ class _FeedEmpty extends StatelessWidget {
       title: hasServerItems ? 'Rien à afficher' : 'Aucun contenu disponible',
       message: hasServerItems
           ? 'Tout le contenu a été masqué. Réinitialise pour revoir le feed.'
-          : 'Configure un serveur Watchtower pour voir du contenu, ou explore l\'interface en mode démo.',
+          : 'Configure un serveur Watchtower pour voir du contenu.',
       children: [
         const SizedBox(height: space24),
         Row(
@@ -715,24 +713,7 @@ class _FeedEmpty extends StatelessWidget {
                 ),
               ),
             ),
-            const SizedBox(width: space12),
-            Expanded(
-              child: OutlinedButton(
-                onPressed: onDemo,
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: colorTextPrimary,
-                  side: const BorderSide(color: colorDivider),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(radiusMd),
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: space12),
-                ),
-                child: Text(
-                  'Mode démo',
-                  style: AppTokens.titleS.copyWith(color: colorTextPrimary),
-                ),
-              ),
-            ),
+
           ],
         ),
         const SizedBox(height: space8),

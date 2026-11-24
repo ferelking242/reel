@@ -116,7 +116,7 @@ class _FeedPageState extends ConsumerState<FeedPage> {
     if (player == null) {
       showReelToast(
         context,
-        'Aperçu de démonstration — aucune vidéo chargée',
+        'Aucune vidéo chargée pour ce post',
         icon: ReelGlyph.effects,
       );
       return;
@@ -324,7 +324,7 @@ class _VideoLayer extends StatelessWidget {
   }
 }
 
-/// Generated poster used for demo items and while thumbnails load.
+/// Generated poster shown while a thumbnail loads or is missing.
 class _GradientPoster extends StatelessWidget {
   const _GradientPoster({required this.seed});
 

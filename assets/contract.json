@@ -1,0 +1,79 @@
+{
+  "schemaVersion": 1,
+  "id": "reel-default",
+  "name": "Reel — feed vertical",
+  "description": "Contrat d'interface de Reel : même esprit que ui-layouts/*.json de watchtower-extensions, étendu au shell (dock) et au lecteur.",
+  "theme": {
+    "mode": "dark",
+    "fontFamily": "TikTokSans",
+    "accent": "#FE2C55",
+    "accentAlt": "#25F4EE",
+    "surface": "#161823"
+  },
+  "shell": {
+    "dock": {
+      "enabled": true,
+      "type": "bar",
+      "height": 52,
+      "labels": "icon+label",
+      "activeIndicator": "fill",
+      "elevation": "border",
+      "margin": 16,
+      "cornerRadius": 999,
+      "haptics": true,
+      "transparentOnFeed": true,
+      "items": [
+        { "id": "home", "label": "Accueil", "icon": "home", "route": "/" },
+        { "id": "friends", "label": "Amis", "icon": "friends", "route": "/friends" },
+        { "id": "create", "label": "Créer", "icon": "plus", "action": "create" },
+        { "id": "inbox", "label": "Boîte", "icon": "inbox", "route": "/inbox", "badge": "unread" },
+        { "id": "profile", "label": "Profil", "icon": "profile", "route": "/profile" }
+      ]
+    }
+  },
+  "screens": {
+    "feed": {
+      "component": "verticalFeed",
+      "tabs": [
+        { "id": "for_you", "title": "Pour toi" },
+        { "id": "following", "title": "Suivis" }
+      ],
+      "overlay": {
+        "author": true,
+        "description": true,
+        "sound": true,
+        "progress": true,
+        "sidebar": true,
+        "doubleTapLike": true
+      },
+      "player": { "autoplay": true, "loop": true, "muted": false, "preload": 2 }
+    },
+    "search": {
+      "component": "search",
+      "suggestions": { "creators": true, "trends": true, "history": true },
+      "filters": "chips",
+      "results": {
+        "component": "grid",
+        "tabs": ["Top", "Vidéos", "Utilisateurs", "Sons", "Hashtags"],
+        "columns": 3
+      }
+    },
+    "live": {
+      "component": "liveGrid",
+      "categories": true,
+      "tile": { "aspectRatio": 0.82, "viewers": false, "ring": true }
+    },
+    "friends": { "component": "creatorList", "suggestions": true },
+    "inbox": {
+      "component": "activityList",
+      "tabs": ["Tout", "Réponses", "Mentions", "Système"]
+    },
+    "profile": {
+      "component": "profile",
+      "stats": ["following", "followers", "likes"],
+      "tabs": ["Vidéos", "Favoris", "J'aime"],
+      "grid": { "columns": 3, "gap": 2, "showViews": true }
+    }
+  },
+  "player": { "mode": "feed" }
+}

@@ -18,7 +18,6 @@ class FeedItem {
     this.isFollowing = false,
     this.authorVerified = false,
     this.createdAt,
-    this.isDemo = false,
   });
 
   final String id;
@@ -36,9 +35,6 @@ class FeedItem {
   final bool isFollowing;
   final bool authorVerified;
   final DateTime? createdAt;
-
-  /// Demo items use generated posters and never hit the network.
-  final bool isDemo;
 
   bool get hasVideo => videoUrl.isNotEmpty;
 
@@ -68,7 +64,6 @@ class FeedItem {
       isFollowing: isFollowing ?? this.isFollowing,
       authorVerified: authorVerified,
       createdAt: createdAt,
-      isDemo: isDemo,
     );
   }
 }
