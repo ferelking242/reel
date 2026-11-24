@@ -1,8 +1,8 @@
 name: Build IPA (Reel — TrollStore)
 
 on:
-  push:
-    branches: [ main ]
+  # Manuel uniquement: le shell est construit par Watchtower, l'IPA n'a plus
+  # à repartir à chaque push sur main.
   workflow_dispatch:
 
 concurrency:
