@@ -66,7 +66,11 @@ void main() {
     );
     addTearDown(container.dispose);
 
-    Future<void> pumpScreen(Widget screen, String name) async {
+    Future<void> pumpScreen(
+      Widget screen,
+      String name, {
+      Duration settle = const Duration(milliseconds: 900),
+    }) async {
       await tester.pumpWidget(
         UncontrolledProviderScope(
           container: container,
@@ -82,7 +86,10 @@ void main() {
         ),
       );
       await tester.pump(const Duration(milliseconds: 60));
-      await tester.pump(const Duration(milliseconds: 400));
+      // Delayed entrances start their ticker inside a timer, so they need a
+      // frame of their own before they reach their final value.
+      await tester.pump(const Duration(milliseconds: 200));
+      await tester.pump(settle);
       await expectLater(
         find.byType(MaterialApp),
         matchesGoldenFile('../goldens/$name.png'),
@@ -117,6 +124,7 @@ void main() {
         ],
       ),
       '10_like_burst',
+      settle: const Duration(milliseconds: 400),
     );
   });
 }

@@ -5,10 +5,10 @@ import 'package:go_router/go_router.dart';
 import '../../core/icons/reel_icons.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/utils/formatters.dart';
-import '../../core/widgets/follow_button.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/reel_avatar.dart';
 import '../../core/widgets/reel_bottom_nav.dart';
+import '../../core/widgets/staggered_entrance.dart';
 import '../feed/models/feed_item.dart';
 import '../feed/providers/engagement_provider.dart';
 import '../feed/providers/feed_provider.dart';
@@ -182,23 +182,38 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
             Expanded(
               child: visible.isEmpty
                   ? _FriendsEmpty(tab: tab)
-                  : ListView.separated(
-                      padding: const EdgeInsets.only(bottom: space32),
+                  : GridView.builder(
+                      padding: const EdgeInsets.fromLTRB(
+                        gutter,
+                        0,
+                        gutter,
+                        space32,
+                      ),
+                      gridDelegate:
+                          const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: space8,
+                        crossAxisSpacing: space8,
+                        childAspectRatio: 0.78,
+                      ),
                       itemCount: visible.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 0.5, indent: 76),
                       itemBuilder: (context, index) {
                         final creator = visible[index];
-                        return _CreatorTile(
-                          creator: creator,
-                          following: engagement.isFollowing(creator.username),
-                          onOpen: () =>
-                              showItemSheet(context, item: creator.item),
-                          onToggleFollow: () {
-                            ref
-                                .read(engagementProvider.notifier)
-                                .toggleFollow(creator.username);
-                          },
+                        return StaggeredEntrance(
+                          index: index,
+                          child: _CreatorCard(
+                            creator: creator,
+                            following: engagement.isFollowing(
+                              creator.username,
+                            ),
+                            onOpen: () =>
+                                showItemSheet(context, item: creator.item),
+                            onToggleFollow: () {
+                              ref
+                                  .read(engagementProvider.notifier)
+                                  .toggleFollow(creator.username);
+                            },
+                          ),
                         );
                       },
                     ),
@@ -224,8 +239,8 @@ class _FriendsScreenState extends ConsumerState<FriendsScreen> {
   }
 }
 
-class _CreatorTile extends StatelessWidget {
-  const _CreatorTile({
+class _CreatorCard extends StatelessWidget {
+  const _CreatorCard({
     required this.creator,
     required this.following,
     required this.onOpen,
@@ -243,46 +258,133 @@ class _CreatorTile extends StatelessWidget {
       0,
       (sum, item) => sum + (item.views ?? item.likes ?? 0),
     );
-    return InkWell(
+
+    return Pressable(
+      scale: 0.96,
       onTap: onOpen,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-          horizontal: gutter,
-          vertical: space10,
+      semanticLabel: 'Ouvrir ${creator.username}',
+      child: Container(
+        decoration: BoxDecoration(
+          color: colorBgCard,
+          borderRadius: BorderRadius.circular(radiusLg),
         ),
-        child: Row(
+        padding: const EdgeInsets.all(space8),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            ReelAvatar(
-              url: creator.avatar,
-              name: creator.username,
-              size: 48,
-              showVerified: creator.verified,
+            _AvatarRing(
+              creator: creator,
+              following: following,
+              onToggleFollow: onToggleFollow,
             ),
-            const SizedBox(width: space12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    creator.username,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTokens.titleS.copyWith(color: colorTextPrimary),
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    '${countLabel(creator.videos.length, 'vidéo')} · ${formatCount(views)} j\'aime',
-                    style: AppTokens.labelS.copyWith(
-                      color: colorTextSecondaryDark,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: space8),
+            Text(
+              creator.username,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTokens.labelM.copyWith(
+                color: colorTextPrimary,
+                fontWeight: FontWeight.w700,
               ),
             ),
-            FollowButton(
-              compact: true,
-              initialFollowing: following,
-              onChanged: (_) => onToggleFollow(),
+            const SizedBox(height: 2),
+            Text(
+              '${formatCount(views)} j\'aime',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: AppTokens.caption.copyWith(
+                color: colorTextSecondaryDark,
+              ),
+            ),
+            const SizedBox(height: space8),
+            _FollowPill(
+              following: following,
+              onTap: onToggleFollow,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Avatar with the cyan/pink ring TikTok uses for creators you have not
+/// followed yet; the ring turns grey once you are subscribed.
+class _AvatarRing extends StatelessWidget {
+  const _AvatarRing({
+    required this.creator,
+    required this.following,
+    required this.onToggleFollow,
+  });
+
+  final _Creator creator;
+  final bool following;
+  final VoidCallback onToggleFollow;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onToggleFollow,
+      child: Container(
+        padding: const EdgeInsets.all(2),
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          gradient: following
+              ? null
+              : const LinearGradient(
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                  colors: [colorBrandCyan, colorBrand],
+                ),
+          color: following ? colorBgElevated : null,
+        ),
+        child: ReelAvatar(
+          url: creator.avatar,
+          name: creator.username,
+          size: 54,
+          showVerified: creator.verified,
+        ),
+      ),
+    );
+  }
+}
+
+class _FollowPill extends StatelessWidget {
+  const _FollowPill({required this.following, required this.onTap});
+
+  final bool following;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: onTap,
+      behavior: HitTestBehavior.opaque,
+      child: AnimatedContainer(
+        duration: durationNormal,
+        curve: ReelCurves.emphasized,
+        height: 26,
+        padding: const EdgeInsets.symmetric(horizontal: space10),
+        decoration: BoxDecoration(
+          color: following ? colorBgElevated : colorBrand,
+          borderRadius: BorderRadius.circular(radiusSm),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            ReelIcon(
+              following ? ReelGlyph.check : ReelGlyph.plus,
+              size: 13,
+              color: following ? colorTextSecondary : Colors.white,
+              strokeWidth: 2.6,
+            ),
+            const SizedBox(width: 3),
+            Text(
+              following ? 'Abonné' : 'Suivre',
+              style: AppTokens.caption.copyWith(
+                color: following ? colorTextSecondary : Colors.white,
+                fontWeight: FontWeight.w700,
+              ),
             ),
           ],
         ),
