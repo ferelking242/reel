@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/contract/contract_provider.dart';
 import '../../../core/haptics.dart';
 import '../../../core/icons/reel_icons.dart';
 import '../../../core/theme/tokens.dart';
@@ -34,6 +35,11 @@ class FeedSidebar extends ConsumerWidget {
     final saved = engagement.isSaved(item.id);
     final following = engagement.isFollowing(item.authorUsername);
     final localComments = ref.watch(commentsProvider)[item.id]?.length ?? 0;
+    final caps = ref.watch(uiContractValueProvider).capabilities;
+    final likeLabel = _countLabel(caps.likes, item.likes, liked ? 1 : 0);
+    final commentLabel =
+        _countLabel(caps.comments, item.comments, localComments);
+    final shareLabel = _countLabel(caps.shares, item.shares, 0);
 
     return SizedBox(
       width: AppTokens.sidebarWidth,
@@ -50,29 +56,31 @@ class FeedSidebar extends ConsumerWidget {
             },
           ),
           const SizedBox(height: space24),
-          _SidebarAction(
-            glyph: ReelGlyph.heart,
-            label: formatCount(item.likes + (liked ? 1 : 0)),
-            active: liked,
-            activeColor: colorLike,
-            semanticLabel: liked ? 'Retirer le like' : "J'aime",
-            onTap: () {
-              final nowLiked =
-                  ref.read(engagementProvider.notifier).toggleLike(item.id);
-              if (nowLiked) Haptics.medium();
-            },
-          ),
-          const SizedBox(height: space20),
-          _SidebarAction(
-            glyph: ReelGlyph.comment,
-            label: formatCount(item.comments + localComments),
-            semanticLabel: 'Commentaires',
-            onTap: onOpenComments,
-          ),
-          const SizedBox(height: space20),
+          if (caps.likes)
+            _SidebarAction(
+              glyph: ReelGlyph.heart,
+              label: likeLabel,
+              active: liked,
+              activeColor: colorLike,
+              semanticLabel: liked ? 'Retirer le like' : "J'aime",
+              onTap: () {
+                final nowLiked =
+                    ref.read(engagementProvider.notifier).toggleLike(item.id);
+                if (nowLiked) Haptics.medium();
+              },
+            ),
+          if (caps.likes) const SizedBox(height: space20),
+          if (caps.comments)
+            _SidebarAction(
+              glyph: ReelGlyph.comment,
+              label: commentLabel,
+              semanticLabel: 'Commentaires',
+              onTap: onOpenComments,
+            ),
+          if (caps.comments) const SizedBox(height: space20),
           _SidebarAction(
             glyph: ReelGlyph.bookmark,
-            label: formatCount(item.bookmarks + (saved ? 1 : 0)),
+            label: _countLabel(true, item.bookmarks, saved ? 1 : 0),
             active: saved,
             activeColor: colorWarning,
             semanticLabel:
@@ -88,22 +96,32 @@ class FeedSidebar extends ConsumerWidget {
               );
             },
           ),
-          const SizedBox(height: space20),
-          _SidebarAction(
-            glyph: ReelGlyph.share,
-            label: formatCount(item.shares),
-            semanticLabel: 'Partager',
-            onTap: onOpenShare,
-          ),
-          const SizedBox(height: space20),
-          _SpinningDisc(
-            item: item,
-            spinning: isActive && item.hasVideo,
-          ),
+          if (caps.shares) const SizedBox(height: space20),
+          if (caps.shares)
+            _SidebarAction(
+              glyph: ReelGlyph.share,
+              label: shareLabel,
+              semanticLabel: 'Partager',
+              onTap: onOpenShare,
+            ),
+          if (caps.sounds && item.soundName != null) ...[
+            const SizedBox(height: space20),
+            _SpinningDisc(
+              item: item,
+              spinning: isActive && item.hasVideo,
+            ),
+          ],
         ],
       ),
     );
   }
+}
+
+/// Builds the label under an action: the real counter when the extension
+/// provides one, otherwise an empty label instead of a fabricated number.
+String _countLabel(bool supported, int? base, int localDelta) {
+  if (!supported || base == null) return '';
+  return formatCount(base + localDelta);
 }
 
 class _AvatarWithFollow extends StatefulWidget {
@@ -369,10 +387,10 @@ class _SpinningDiscState extends State<_SpinningDisc>
       scale: 0.9,
       onTap: () => showReelToast(
         context,
-        widget.item.soundName,
+        widget.item.soundName ?? '',
         icon: ReelGlyph.music,
       ),
-      semanticLabel: 'Son : ${widget.item.soundName}',
+      semanticLabel: 'Son : ${widget.item.soundName ?? ''}',
       child: SizedBox(
         width: 46,
         height: 46,

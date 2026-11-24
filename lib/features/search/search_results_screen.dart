@@ -205,7 +205,7 @@ class _VideoTile extends StatelessWidget {
                 ),
                 const SizedBox(width: 2),
                 Text(
-                  formatCount(video.likes),
+                  video.formattedViews ?? video.formattedLikes ?? '—',
                   style: AppTokens.caption.copyWith(
                     color: Colors.white,
                     fontWeight: FontWeight.w600,

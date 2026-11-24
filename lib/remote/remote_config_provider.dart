@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:reel/core/host/reel_host.dart';
 import 'package:reel/remote/remote_client.dart';
 
 const _kBaseUrl        = 'wt_real_server_url';
@@ -24,6 +25,13 @@ class RemoteConfig {
 class RemoteConfigNotifier extends AsyncNotifier<RemoteConfig> {
   @override
   Future<RemoteConfig> build() async {
+    final host = ref.watch(reelHostProvider);
+    if (host != null) {
+      return RemoteConfig(
+        baseUrl: 'host://local',
+        selectedSourceId: host.sourceId,
+      );
+    }
     final prefs = await SharedPreferences.getInstance();
     return RemoteConfig(
       baseUrl:          prefs.getString(_kBaseUrl)        ?? '',
@@ -57,7 +65,18 @@ final remoteConfigProvider =
         RemoteConfigNotifier.new);
 
 final remoteClientProvider = Provider<RemoteApiClient?>((ref) {
+  final host = ref.watch(reelHostProvider);
+  if (host != null) {
+    final client = RemoteApiClient(
+      baseUrl: 'host://local',
+      transport: host.transport,
+    );
+    ref.onDispose(client.dispose);
+    return client;
+  }
   final config = ref.watch(remoteConfigProvider).asData?.value;
   if (config == null || !config.isConfigured) return null;
-  return RemoteApiClient(baseUrl: config.baseUrl, apiKey: config.apiKey);
+  final client = RemoteApiClient(baseUrl: config.baseUrl, apiKey: config.apiKey);
+  ref.onDispose(client.dispose);
+  return client;
 });

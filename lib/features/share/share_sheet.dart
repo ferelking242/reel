@@ -158,7 +158,7 @@ class ShareSheet extends ConsumerWidget {
                     Navigator.of(context).maybePop();
                     showReelToast(
                       context,
-                      item.soundName,
+                      item.soundName ?? '',
                       icon: ReelGlyph.music,
                     );
                   },

@@ -1,19 +1,25 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:marquee/marquee.dart';
 
+import '../../../core/contract/contract_provider.dart';
 import '../../../core/icons/reel_icons.dart';
 import '../../../core/theme/tokens.dart';
 import '../../../core/utils/formatters.dart';
 import '../models/feed_item.dart';
 
 /// Bottom-left block of a feed page: author, description and sound.
-class FeedOverlayBottom extends StatelessWidget {
+class FeedOverlayBottom extends ConsumerWidget {
   const FeedOverlayBottom({super.key, required this.item});
 
   final FeedItem item;
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
+    final caps = ref.watch(uiContractValueProvider).capabilities;
+    final viewsLabel =
+        caps.views ? (item.formattedViews ?? item.formattedLikes) : null;
+
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,10 +58,31 @@ class FeedOverlayBottom extends StatelessWidget {
             ],
           ],
         ),
+        if (viewsLabel != null) ...[
+          const SizedBox(height: space6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              const ReelIcon(
+                ReelGlyph.play,
+                size: 12,
+                color: colorTextSecondary,
+              ),
+              const SizedBox(width: space4),
+              Text(
+                viewsLabel,
+                style: AppTokens.labelS.copyWith(
+                  color: colorTextSecondary,
+                  shadows: AppTokens.feedTextShadow,
+                ),
+              ),
+            ],
+          ),
+        ],
         const SizedBox(height: space6),
         _ExpandableDescription(item: item),
         const SizedBox(height: space10),
-        _SoundTicker(soundName: item.soundName),
+        if (item.soundName != null) _SoundTicker(soundName: item.soundName!),
       ],
     );
   }

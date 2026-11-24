@@ -1,13 +1,18 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import 'core/host/reel_host.dart';
 import 'core/theme/reel_theme.dart';
 import 'core/theme/tokens.dart';
-import 'router/router.dart';
+import 'router/router.dart' as app_router;
 
 class ReelApp extends StatelessWidget {
-  const ReelApp({super.key});
+  const ReelApp({super.key, this.routerConfig});
+
+  /// Injected by a host so Reel does not share the standalone navigation state.
+  final GoRouter? routerConfig;
 
   @override
   Widget build(BuildContext context) {
@@ -17,7 +22,7 @@ class ReelApp extends StatelessWidget {
       theme: ReelTheme.light(),
       darkTheme: ReelTheme.dark(),
       themeMode: ThemeMode.dark,
-      routerConfig: router,
+      routerConfig: routerConfig ?? app_router.router,
       locale: const Locale('fr'),
       supportedLocales: const [Locale('fr'), Locale('en')],
       localizationsDelegates: const [
@@ -50,4 +55,24 @@ Widget buildTestApp({Widget? home}) {
       home: home ?? const Scaffold(backgroundColor: colorBgBase),
     ),
   );
+}
+
+/// Reel mounted inside another app (Watchtower).
+///
+/// The host supplies the extension, its layout contract and a local transport;
+/// Reel keeps its own providers, so nothing leaks into the host scope.
+class ReelHostedApp extends StatelessWidget {
+  const ReelHostedApp({super.key, required this.host});
+
+  final ReelHost host;
+
+  @override
+  Widget build(BuildContext context) {
+    return ProviderScope(
+      overrides: [reelHostProvider.overrideWithValue(host)],
+      child: ReelApp(
+        routerConfig: app_router.createReelRouter(initialLocation: '/'),
+      ),
+    );
+  }
 }

@@ -68,7 +68,9 @@ class SearchResults {
       case SearchSort.relevance:
         break;
       case SearchSort.popular:
-        copy.sort((a, b) => b.likes.compareTo(a.likes));
+        copy.sort(
+          (a, b) => (b.likes ?? 0).compareTo(a.likes ?? 0),
+        );
       case SearchSort.recent:
         copy.sort((a, b) {
           final left = a.createdAt ?? DateTime.fromMillisecondsSinceEpoch(0);
@@ -233,7 +235,7 @@ List<FeedItem> _localMatches(List<FeedItem> items, String query) {
       .where((item) =>
           item.title.toLowerCase().contains(needle) ||
           item.authorUsername.toLowerCase().contains(needle) ||
-          item.soundName.toLowerCase().contains(needle) ||
+          (item.soundName ?? '').toLowerCase().contains(needle) ||
           item.hashtags.any((tag) => tag.toLowerCase().contains(needle)))
       .toList(growable: false);
 }
@@ -309,7 +311,9 @@ List<SearchTag> _tagsFrom(List<FeedItem> videos) {
 List<SearchSound> _soundsFrom(List<FeedItem> videos) {
   final counts = <String, int>{};
   for (final video in videos) {
-    counts[video.soundName] = (counts[video.soundName] ?? 0) + 1;
+    final sound = video.soundName;
+    if (sound == null) continue;
+    counts[sound] = (counts[sound] ?? 0) + 1;
   }
   final entries = counts.entries.toList()
     ..sort((a, b) => b.value.compareTo(a.value));

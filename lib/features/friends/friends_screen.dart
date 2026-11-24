@@ -239,7 +239,10 @@ class _CreatorTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final views = creator.videos.fold<int>(0, (sum, item) => sum + item.likes);
+    final views = creator.videos.fold<int>(
+      0,
+      (sum, item) => sum + (item.views ?? item.likes ?? 0),
+    );
     return InkWell(
       onTap: onOpen,
       child: Padding(

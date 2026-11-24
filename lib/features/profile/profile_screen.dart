@@ -572,7 +572,7 @@ class _VideoGrid extends StatelessWidget {
                     ),
                     const SizedBox(width: 2),
                     Text(
-                      formatCount(item.likes),
+                      item.formattedViews ?? item.formattedLikes ?? '—',
                       style: AppTokens.caption.copyWith(
                         color: Colors.white,
                         fontWeight: FontWeight.w600,

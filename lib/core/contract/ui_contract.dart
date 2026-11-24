@@ -109,6 +109,84 @@ class DockConfig {
   }
 }
 
+/// What an extension really supports.
+///
+/// The same block ships in every `ui-layouts/<slug>.json` of
+/// watchtower-extensions. Reel hides an affordance the extension does not
+/// declare instead of showing a button that cannot work.
+class ExtensionCapabilities {
+  const ExtensionCapabilities({
+    this.live = true,
+    this.views = true,
+    this.likes = true,
+    this.comments = true,
+    this.shares = true,
+    this.sounds = true,
+    this.download = false,
+    this.follow = true,
+  });
+
+  final bool live;
+  final bool views;
+  final bool likes;
+  final bool comments;
+  final bool shares;
+  final bool sounds;
+  final bool download;
+  final bool follow;
+
+  static const all = ExtensionCapabilities();
+
+  factory ExtensionCapabilities.fromJson(Map<String, dynamic> json) {
+    bool read(String key, bool fallback) {
+      final value = json[key];
+      return value is bool ? value : fallback;
+    }
+
+    return ExtensionCapabilities(
+      live: read('live', true),
+      views: read('views', true),
+      likes: read('likes', true),
+      comments: read('comments', true),
+      shares: read('shares', true),
+      sounds: read('sounds', true),
+      download: read('download', false),
+      follow: read('follow', true),
+    );
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      other is ExtensionCapabilities &&
+      other.live == live &&
+      other.views == views &&
+      other.likes == likes &&
+      other.comments == comments &&
+      other.shares == shares &&
+      other.sounds == sounds &&
+      other.download == download &&
+      other.follow == follow;
+
+  @override
+  int get hashCode =>
+      Object.hash(live, views, likes, comments, shares, sounds, download, follow);
+}
+
+/// Which host screen draws the extension.
+enum ReelRenderer {
+  /// Reel owns the whole shell (vertical feed).
+  reel,
+
+  /// Watchtower's own home/browse screens.
+  watch;
+
+  static ReelRenderer fromName(String? name) => switch (name) {
+        'reel' => ReelRenderer.reel,
+        'watch' || null => ReelRenderer.watch,
+        _ => throw FormatException('Unknown renderer: $name'),
+      };
+}
+
 /// Declarative UI contract loaded from `assets/contract.json`.
 ///
 /// Same spirit as the `ui-layouts/*.json` files of watchtower-extensions, with
@@ -122,6 +200,8 @@ class UiContract {
     required this.playerAutoplay,
     required this.playerLoop,
     required this.playerMuted,
+    this.renderer = ReelRenderer.reel,
+    this.capabilities = ExtensionCapabilities.all,
   });
 
   static const assetPath = 'assets/contract.json';
@@ -132,6 +212,8 @@ class UiContract {
   final bool playerAutoplay;
   final bool playerLoop;
   final bool playerMuted;
+  final ReelRenderer renderer;
+  final ExtensionCapabilities capabilities;
 
   static const fallback = UiContract(
     schemaVersion: 1,
@@ -195,6 +277,8 @@ class UiContract {
         ? fallback.dock
         : DockConfig.fromJson(dockJson);
 
+    final capabilitiesJson = json['capabilities'] as Map<String, dynamic>?;
+
     return UiContract(
       schemaVersion: json['schemaVersion'] as int? ?? 1,
       id: json['id'] as String? ?? 'unnamed',
@@ -202,6 +286,10 @@ class UiContract {
       playerAutoplay: player['autoplay'] as bool? ?? true,
       playerLoop: player['loop'] as bool? ?? true,
       playerMuted: player['muted'] as bool? ?? false,
+      renderer: ReelRenderer.fromName(json['renderer'] as String?),
+      capabilities: capabilitiesJson == null
+          ? ExtensionCapabilities.all
+          : ExtensionCapabilities.fromJson(capabilitiesJson),
     );
   }
 

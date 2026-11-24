@@ -11,10 +11,21 @@ import '../features/profile/profile_screen.dart';
 import '../features/search/search_screen.dart';
 import '../splash_screen.dart';
 
-final router = GoRouter(
-  initialLocation: '/splash',
-  debugLogDiagnostics: false,
-  routes: [
+/// The router of the standalone app.
+final router = createReelRouter();
+
+/// Builds a fresh router. A host app mounts Reel on its own route and needs
+/// its own instance, otherwise two `MaterialApp.router` widgets would share
+/// one navigation state.
+GoRouter createReelRouter({String initialLocation = '/splash'}) {
+  return GoRouter(
+    initialLocation: initialLocation,
+    debugLogDiagnostics: false,
+    routes: _routes,
+  );
+}
+
+final _routes = <RouteBase>[
     GoRoute(
       path: '/splash',
       name: 'splash',
@@ -78,8 +89,7 @@ final router = GoRouter(
         const ConnectScreen(),
       ),
     ),
-  ],
-);
+];
 
 CustomTransitionPage<void> _fadePage(GoRouterState state, Widget child) {
   return CustomTransitionPage<void>(

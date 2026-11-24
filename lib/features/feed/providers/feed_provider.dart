@@ -2,6 +2,7 @@ import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/host/reel_host.dart';
 import '../../../remote/remote_client.dart';
 import '../../../remote/remote_config_provider.dart';
 import '../../../utils/log/app_file_logger.dart';
@@ -40,7 +41,7 @@ final currentFeedIndexProvider =
 /// 0 = « Pour toi », 1 = « Suivis ».
 class _FeedTabNotifier extends Notifier<int> {
   @override
-  int build() => 0;
+  int build() => ref.watch(reelHostProvider)?.initialTab ?? 0;
   void update(int value) => state = value;
 }
 

@@ -82,7 +82,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
     final ordered = _newestFirst
         ? comments.reversed.toList(growable: false)
         : comments;
-    final total = widget.item.comments + comments.length;
+    final total = (widget.item.comments ?? 0) + comments.length;
     final keyboardInset = MediaQuery.viewInsetsOf(context).bottom;
 
     return Column(

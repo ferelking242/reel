@@ -1,6 +1,7 @@
 import 'package:watchtower_client/watchtower_client.dart';
 import 'package:reel/utils/log/app_file_logger.dart';
 import 'package:reel/remote/app_version.dart';
+import 'package:reel/remote/reel_transport.dart';
 
 /// Adaptateur mince sur [WatchtowerClient] (SDK officiel Watchtower).
 ///
@@ -13,19 +14,40 @@ import 'package:reel/remote/app_version.dart';
 /// - Timeout configurable par requête
 /// - Exceptions typées ([WatchtowerNetworkException], [WatchtowerApiException])
 class RemoteApiClient {
-  RemoteApiClient({required this.baseUrl, this.apiKey})
-      : _client = WatchtowerClient(
-          url: baseUrl,
-          apiKey: apiKey,
-          timeout: const Duration(seconds: 20),
-          maxRetries: 3,
-        );
+  RemoteApiClient({
+    required this.baseUrl,
+    this.apiKey,
+    ReelTransport? transport,
+  })  : _transport = transport,
+        _client = transport == null
+            ? WatchtowerClient(
+                url: baseUrl,
+                apiKey: apiKey,
+                timeout: const Duration(seconds: 20),
+                maxRetries: 3,
+              )
+            : null;
 
   final String baseUrl;
   final String? apiKey;
-  final WatchtowerClient _client;
+  final WatchtowerClient? _client;
+  final ReelTransport? _transport;
 
   static const _tag = 'RemoteClient';
+
+  Future<Map<String, dynamic>> _get(
+    String path, [
+    Map<String, String>? query,
+  ]) {
+    final transport = _transport;
+    if (transport != null) return transport.get(path, query: query);
+    return _client!.getRaw(
+      path,
+      queryParams: <String, String?>{
+        for (final e in (query ?? const {}).entries) e.key: e.value,
+      },
+    );
+  }
 
   // ── Health check ────────────────────────────────────────────────────────────
 
@@ -33,7 +55,7 @@ class RemoteApiClient {
     logger.log(_tag, 'GET /api/ping [v${AppVersion.headerValue}]');
     try {
       // getRaw conserve tous les champs (status, version, …)
-      return await _client.getRaw('/api/ping');
+      return await _get('/api/ping');
     } catch (_) {
       return {'status': 'error'};
     }
@@ -47,8 +69,13 @@ class RemoteApiClient {
   /// [List<Map<String,dynamic>>] pour ne pas casser [FeedNotifier._resolveSource].
   Future<List<dynamic>> sources() async {
     logger.log(_tag, 'GET /api/sources');
-    final list = await _client.sources.list();
-    return list.map((s) => s.toJson()).toList();
+    if (_transport != null) {
+      final data = await _get('/api/sources');
+      final raw = data['sources'] ?? data['list'] ?? data['data'] ?? data;
+      return raw is List ? raw : const [];
+    }
+    final list = _client!.sources.list();
+    return (await list).map((s) => s.toJson()).toList();
   }
 
   // ── Contenu — via getRaw (conserve TOUS les champs de la réponse) ────────────
@@ -59,47 +86,38 @@ class RemoteApiClient {
 
   Future<Map<String, dynamic>> popular(String sourceId, {int page = 1}) async {
     logger.log(_tag, 'GET /api/sources/$sourceId/popular?page=$page');
-    return _client.getRaw(
-      '/api/sources/$sourceId/popular',
-      queryParams: {'page': page.toString()},
-    );
+    return _get('/api/sources/$sourceId/popular', {'page': page.toString()});
   }
 
   Future<Map<String, dynamic>> latest(String sourceId, {int page = 1}) async {
     logger.log(_tag, 'GET /api/sources/$sourceId/latest?page=$page');
-    return _client.getRaw(
-      '/api/sources/$sourceId/latest',
-      queryParams: {'page': page.toString()},
-    );
+    return _get('/api/sources/$sourceId/latest', {'page': page.toString()});
   }
 
   Future<Map<String, dynamic>> search(
       String sourceId, String query, {int page = 1}) async {
     logger.log(_tag, 'GET /api/sources/$sourceId/search?q=$query&page=$page');
-    return _client.getRaw(
+    return _get(
       '/api/sources/$sourceId/search',
-      queryParams: {'q': query, 'page': page.toString()},
+      {'q': query, 'page': page.toString()},
     );
   }
 
   Future<Map<String, dynamic>> detail(
       String sourceId, String itemUrl) async {
     logger.log(_tag, 'GET /api/sources/$sourceId/detail');
-    return _client.getRaw(
-      '/api/sources/$sourceId/detail',
-      queryParams: {'url': itemUrl},
-    );
+    return _get('/api/sources/$sourceId/detail', {'url': itemUrl});
   }
 
   Future<Map<String, dynamic>> videos(
       String sourceId, String episodeUrl) async {
     logger.log(_tag, 'GET /api/sources/$sourceId/videos');
-    return _client.getRaw(
-      '/api/sources/$sourceId/videos',
-      queryParams: {'url': episodeUrl},
-    );
+    return _get('/api/sources/$sourceId/videos', {'url': episodeUrl});
   }
 
   /// Libère les ressources du client HTTP sous-jacent.
-  void dispose() => _client.close();
+  void dispose() {
+    _transport?.close();
+    _client?.close();
+  }
 }

@@ -1,5 +1,4 @@
 import 'dart:convert';
-import 'dart:math';
 
 import 'models/feed_item.dart';
 
@@ -39,9 +38,7 @@ FeedItem feedItemFromRaw(
       raw['genres'] as String? ??
       raw['tags'] as String? ??
       (raw['description'] as String? ?? '');
-
-  final seed = title.hashCode.abs();
-  final rng = Random(seed + index);
+  final sound = raw['sound'] as String? ?? raw['music'] as String?;
 
   return FeedItem(
     id: link.isNotEmpty ? link : (raw['url'] as String? ?? 'item_$index'),
@@ -50,15 +47,34 @@ FeedItem feedItemFromRaw(
     title: title,
     authorUsername: '@${author.toLowerCase().replaceAll(' ', '_')}',
     authorAvatar: thumbnail,
-    likes: 1000 + rng.nextInt(499000),
-    comments: 100 + rng.nextInt(9900),
-    shares: 200 + rng.nextInt(19800),
-    bookmarks: 50 + rng.nextInt(4950),
+    views: _count(raw, const ['views', 'viewCount', 'playCount', 'plays']),
+    likes: _count(raw, const ['likes', 'likeCount']),
+    comments: _count(raw, const ['comments', 'commentCount']),
+    shares: _count(raw, const ['shares', 'shareCount']),
     hashtags: parseTags(genres).take(4).toList(),
-    soundName: 'Son original — ${title.split(' ').take(3).join(' ')}',
-    authorVerified: rng.nextInt(4) == 0,
-    createdAt: DateTime.now().subtract(Duration(hours: rng.nextInt(72))),
+    soundName: sound,
+    authorVerified: raw['verified'] == true,
+    createdAt: _date(raw['createdAt'] ?? raw['uploadedAt']),
   );
+}
+
+/// Reads a counter only when the extension really returned one.
+int? _count(Map<String, dynamic> raw, List<String> keys) {
+  for (final key in keys) {
+    final value = raw[key];
+    if (value is num) return value.toInt();
+    if (value is String) {
+      final parsed = int.tryParse(value.replaceAll(RegExp(r'[^0-9]'), ''));
+      if (parsed != null) return parsed;
+    }
+  }
+  return null;
+}
+
+DateTime? _date(Object? raw) {
+  if (raw is String) return DateTime.tryParse(raw);
+  if (raw is num) return DateTime.fromMillisecondsSinceEpoch(raw.toInt());
+  return null;
 }
 
 /// Extracts the item list from any Watchtower response shape.

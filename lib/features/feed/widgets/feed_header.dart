@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../core/contract/contract_provider.dart';
 import '../../../core/haptics.dart';
 import '../../../core/icons/reel_icons.dart';
 import '../../../core/theme/tokens.dart';
@@ -20,6 +21,7 @@ class FeedHeader extends ConsumerWidget {
     final tab = ref.watch(feedTabProvider);
     final muted = ref.watch(feedMutedProvider);
     final status = ref.watch(serverStatusProvider);
+    final liveEnabled = ref.watch(uiContractValueProvider).capabilities.live;
 
     final showBanner = status != null && !status.startsWith('✓');
 
@@ -31,12 +33,13 @@ class FeedHeader extends ConsumerWidget {
           child: Row(
             children: [
               const SizedBox(width: space12),
-              Pressable(
-                scale: 0.9,
-                onTap: () => context.push('/live'),
-                semanticLabel: 'Ouvrir le direct',
-                child: const _LiveEntry(),
-              ),
+              if (liveEnabled)
+                Pressable(
+                  scale: 0.9,
+                  onTap: () => context.push('/live'),
+                  semanticLabel: 'Ouvrir le direct',
+                  child: const _LiveEntry(),
+                ),
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,

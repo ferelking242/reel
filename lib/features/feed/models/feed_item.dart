@@ -1,6 +1,9 @@
 import '../../../core/utils/formatters.dart';
 
 /// One video of the vertical feed.
+///
+/// Counters are nullable on purpose: an extension that does not expose likes
+/// or comments must not see invented numbers in the UI.
 class FeedItem {
   const FeedItem({
     required this.id,
@@ -9,12 +12,13 @@ class FeedItem {
     required this.title,
     required this.authorUsername,
     required this.authorAvatar,
-    required this.likes,
-    required this.comments,
-    required this.shares,
-    required this.bookmarks,
     required this.hashtags,
-    required this.soundName,
+    this.views,
+    this.likes,
+    this.comments,
+    this.shares,
+    this.bookmarks,
+    this.soundName,
     this.isFollowing = false,
     this.authorVerified = false,
     this.createdAt,
@@ -26,22 +30,26 @@ class FeedItem {
   final String title;
   final String authorUsername;
   final String authorAvatar;
-  final int likes;
-  final int comments;
-  final int shares;
-  final int bookmarks;
+  final int? views;
+  final int? likes;
+  final int? comments;
+  final int? shares;
+  final int? bookmarks;
   final List<String> hashtags;
-  final String soundName;
+  final String? soundName;
   final bool isFollowing;
   final bool authorVerified;
   final DateTime? createdAt;
 
   bool get hasVideo => videoUrl.isNotEmpty;
 
-  String get formattedLikes => formatCount(likes);
-  String get formattedComments => formatCount(comments);
-  String get formattedShares => formatCount(shares);
-  String get formattedBookmarks => formatCount(bookmarks);
+  String? get formattedViews => views == null ? null : formatCount(views!);
+  String? get formattedLikes => likes == null ? null : formatCount(likes!);
+  String? get formattedComments =>
+      comments == null ? null : formatCount(comments!);
+  String? get formattedShares => shares == null ? null : formatCount(shares!);
+  String? get formattedBookmarks =>
+      bookmarks == null ? null : formatCount(bookmarks!);
 
   FeedItem copyWith({
     String? videoUrl,
@@ -55,6 +63,7 @@ class FeedItem {
       title: title,
       authorUsername: authorUsername,
       authorAvatar: authorAvatar,
+      views: views,
       likes: likes,
       comments: comments,
       shares: shares,

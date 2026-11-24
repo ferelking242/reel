@@ -1,5 +1,16 @@
 {
   "schemaVersion": 1,
+  "renderer": "reel",
+  "capabilities": {
+    "live": true,
+    "views": true,
+    "likes": true,
+    "comments": true,
+    "shares": true,
+    "sounds": true,
+    "download": false,
+    "follow": true
+  },
   "id": "reel-default",
   "name": "Reel — feed vertical",
   "description": "Contrat d'interface de Reel : même esprit que ui-layouts/*.json de watchtower-extensions, étendu au shell (dock) et au lecteur.",
@@ -23,11 +34,37 @@
       "haptics": true,
       "transparentOnFeed": true,
       "items": [
-        { "id": "home", "label": "Accueil", "icon": "home", "route": "/" },
-        { "id": "friends", "label": "Amis", "icon": "friends", "route": "/friends" },
-        { "id": "create", "label": "Créer", "icon": "plus", "action": "create" },
-        { "id": "inbox", "label": "Boîte", "icon": "inbox", "route": "/inbox", "badge": "unread" },
-        { "id": "profile", "label": "Profil", "icon": "profile", "route": "/profile" }
+        {
+          "id": "home",
+          "label": "Accueil",
+          "icon": "home",
+          "route": "/"
+        },
+        {
+          "id": "friends",
+          "label": "Amis",
+          "icon": "friends",
+          "route": "/friends"
+        },
+        {
+          "id": "create",
+          "label": "Créer",
+          "icon": "plus",
+          "action": "create"
+        },
+        {
+          "id": "inbox",
+          "label": "Boîte",
+          "icon": "inbox",
+          "route": "/inbox",
+          "badge": "unread"
+        },
+        {
+          "id": "profile",
+          "label": "Profil",
+          "icon": "profile",
+          "route": "/profile"
+        }
       ]
     }
   },
@@ -35,8 +72,14 @@
     "feed": {
       "component": "verticalFeed",
       "tabs": [
-        { "id": "for_you", "title": "Pour toi" },
-        { "id": "following", "title": "Suivis" }
+        {
+          "id": "for_you",
+          "title": "Pour toi"
+        },
+        {
+          "id": "following",
+          "title": "Suivis"
+        }
       ],
       "overlay": {
         "author": true,
@@ -46,34 +89,75 @@
         "sidebar": true,
         "doubleTapLike": true
       },
-      "player": { "autoplay": true, "loop": true, "muted": false, "preload": 2 }
+      "player": {
+        "autoplay": true,
+        "loop": true,
+        "muted": false,
+        "preload": 2
+      }
     },
     "search": {
       "component": "search",
-      "suggestions": { "creators": true, "trends": true, "history": true },
+      "suggestions": {
+        "creators": true,
+        "trends": true,
+        "history": true
+      },
       "filters": "chips",
       "results": {
         "component": "grid",
-        "tabs": ["Top", "Vidéos", "Utilisateurs", "Sons", "Hashtags"],
+        "tabs": [
+          "Top",
+          "Vidéos",
+          "Utilisateurs",
+          "Sons",
+          "Hashtags"
+        ],
         "columns": 3
       }
     },
     "live": {
       "component": "liveGrid",
       "categories": true,
-      "tile": { "aspectRatio": 0.82, "viewers": false, "ring": true }
+      "tile": {
+        "aspectRatio": 0.82,
+        "viewers": false,
+        "ring": true
+      }
     },
-    "friends": { "component": "creatorList", "suggestions": true },
+    "friends": {
+      "component": "creatorList",
+      "suggestions": true
+    },
     "inbox": {
       "component": "activityList",
-      "tabs": ["Tout", "Réponses", "Mentions", "Système"]
+      "tabs": [
+        "Tout",
+        "Réponses",
+        "Mentions",
+        "Système"
+      ]
     },
     "profile": {
       "component": "profile",
-      "stats": ["following", "followers", "likes"],
-      "tabs": ["Vidéos", "Favoris", "J'aime"],
-      "grid": { "columns": 3, "gap": 2, "showViews": true }
+      "stats": [
+        "following",
+        "followers",
+        "likes"
+      ],
+      "tabs": [
+        "Vidéos",
+        "Favoris",
+        "J'aime"
+      ],
+      "grid": {
+        "columns": 3,
+        "gap": 2,
+        "showViews": true
+      }
     }
   },
-  "player": { "mode": "feed" }
+  "player": {
+    "mode": "feed"
+  }
 }

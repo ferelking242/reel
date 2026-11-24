@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/icons/reel_icons.dart';
 import '../../../core/theme/tokens.dart';
-import '../../../core/utils/formatters.dart';
 import '../../../core/widgets/pressable.dart';
 import '../../../core/widgets/reel_sheet.dart';
 import '../../../core/widgets/video_thumbnail.dart';
@@ -79,7 +78,7 @@ class ItemSheet extends ConsumerWidget {
                         ),
                         const SizedBox(width: space4),
                         Text(
-                          formatCount(item.likes),
+                          item.formattedLikes ?? '—',
                           style: AppTokens.labelS.copyWith(
                             color: colorTextSecondaryDark,
                           ),
@@ -92,7 +91,7 @@ class ItemSheet extends ConsumerWidget {
                         ),
                         const SizedBox(width: space4),
                         Text(
-                          formatCount(item.comments),
+                          item.formattedComments ?? '—',
                           style: AppTokens.labelS.copyWith(
                             color: colorTextSecondaryDark,
                           ),
