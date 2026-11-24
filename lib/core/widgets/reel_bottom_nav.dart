@@ -193,20 +193,24 @@ class _NavButton extends StatelessWidget {
                 ),
               ),
             ],
-            if (active && indicator == DockIndicator.dot)
-              Container(
+            if (indicator == DockIndicator.dot)
+              AnimatedContainer(
+                duration: durationNormal,
+                curve: ReelCurves.emphasized,
                 margin: const EdgeInsets.only(top: 3),
-                width: 4,
+                width: active ? 4 : 0,
                 height: 4,
                 decoration: const BoxDecoration(
                   color: colorBrand,
                   shape: BoxShape.circle,
                 ),
               ),
-            if (active && indicator == DockIndicator.underline)
-              Container(
+            if (indicator == DockIndicator.underline)
+              AnimatedContainer(
+                duration: durationNormal,
+                curve: ReelCurves.emphasized,
                 margin: const EdgeInsets.only(top: 3),
-                width: 16,
+                width: active ? 16 : 0,
                 height: 2,
                 decoration: BoxDecoration(
                   color: colorTextPrimary,
@@ -220,29 +224,76 @@ class _NavButton extends StatelessWidget {
   }
 }
 
-class _Badge extends StatelessWidget {
+class _Badge extends StatefulWidget {
   const _Badge({required this.count});
 
   final int count;
 
   @override
+  State<_Badge> createState() => _BadgeState();
+}
+
+class _BadgeState extends State<_Badge> with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 460),
+  );
+  late final Animation<double> _scale = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 0.3,
+        end: 1.22,
+      ).chain(CurveTween(curve: Curves.easeOutCubic)),
+      weight: 55,
+    ),
+    TweenSequenceItem(
+      tween: Tween(
+        begin: 1.22,
+        end: 1.0,
+      ).chain(CurveTween(curve: Curves.elasticOut)),
+      weight: 45,
+    ),
+  ]).animate(_controller);
+
+  @override
+  void initState() {
+    super.initState();
+    _controller.forward();
+  }
+
+  @override
+  void didUpdateWidget(covariant _Badge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.count != widget.count) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return Container(
-      constraints: const BoxConstraints(minWidth: 16),
-      height: 16,
-      padding: const EdgeInsets.symmetric(horizontal: 4),
-      decoration: BoxDecoration(
-        color: colorBrand,
-        borderRadius: BorderRadius.circular(radiusPill),
-        border: Border.all(color: colorBgBase, width: 1.5),
-      ),
-      child: Center(
-        child: Text(
-          count > 99 ? '99+' : '$count',
-          style: AppTokens.caption.copyWith(
-            color: Colors.white,
-            fontSize: 9,
-            fontWeight: FontWeight.w700,
+    return ScaleTransition(
+      scale: _scale,
+      child: Container(
+        constraints: const BoxConstraints(minWidth: 16),
+        height: 16,
+        padding: const EdgeInsets.symmetric(horizontal: 4),
+        decoration: BoxDecoration(
+          color: colorBrand,
+          borderRadius: BorderRadius.circular(radiusPill),
+          border: Border.all(color: colorBgBase, width: 1.5),
+        ),
+        child: Center(
+          child: Text(
+            widget.count > 99 ? '99+' : '${widget.count}',
+            style: AppTokens.caption.copyWith(
+              color: Colors.white,
+              fontSize: 9,
+              fontWeight: FontWeight.w700,
+            ),
           ),
         ),
       ),
@@ -278,7 +329,7 @@ class _CreateButton extends StatelessWidget {
                   left: 0,
                   top: 0,
                   child: Container(
-                    width: 42,
+                    width: 40,
                     height: 28,
                     decoration: BoxDecoration(
                       color: colorBrandCyan,
@@ -290,7 +341,7 @@ class _CreateButton extends StatelessWidget {
                   right: 0,
                   bottom: 0,
                   child: Container(
-                    width: 42,
+                    width: 40,
                     height: 28,
                     decoration: BoxDecoration(
                       color: colorBrand,
@@ -300,8 +351,8 @@ class _CreateButton extends StatelessWidget {
                 ),
                 Center(
                   child: Container(
-                    width: 42,
-                    height: 28,
+                    width: 38,
+                    height: 26,
                     decoration: BoxDecoration(
                       color: Colors.white,
                       borderRadius: BorderRadius.circular(radiusMd),

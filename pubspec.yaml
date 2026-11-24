@@ -1,7 +1,7 @@
 name: reel
 description: Reel — UI TikTok-style pour Watchtower. Fusionne dans watchtower/lib/ui/tiktok/.
 publish_to: 'none'
-version: 1.0.0+1
+version: 1.1.0+2
 
 environment:
   sdk: ^3.10.0
@@ -52,6 +52,7 @@ dependencies:
   path_provider:    ^2.1.5
   package_info_plus: ^9.0.1
   intl:             ^0.20.2
+  material_symbols_icons: ^4.2960.0
 
 dev_dependencies:
   flutter_test:

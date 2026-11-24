@@ -40,41 +40,16 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen>
   Widget build(BuildContext context) {
     final resultsAsync = ref.watch(searchResultsProvider(widget.query));
     final sort = ref.watch(searchSortProvider);
+    final data = resultsAsync.asData?.value;
 
     return Column(
       children: [
-        Row(
-          children: [
-            Expanded(
-              child: TabBar(
-                controller: _tabs,
-                isScrollable: true,
-                tabAlignment: TabAlignment.start,
-                tabs: const [
-                  Tab(text: 'Top'),
-                  Tab(text: 'Vidéos'),
-                  Tab(text: 'Utilisateurs'),
-                  Tab(text: 'Sons'),
-                  Tab(text: 'Hashtags'),
-                ],
-              ),
-            ),
-            Pressable(
-              scale: 0.9,
-              onTap: () => showSearchFiltersSheet(context),
-              semanticLabel: 'Filtres de recherche',
-              child: const Padding(
-                padding: EdgeInsets.symmetric(horizontal: space12),
-                child: ReelIcon(
-                  ReelGlyph.settings,
-                  size: 20,
-                  color: colorTextSecondary,
-                ),
-              ),
-            ),
-          ],
+        _ResultsTabBar(
+          controller: _tabs,
+          query: widget.query,
+          results: data,
+          onOpenFilters: () => showSearchFiltersSheet(context),
         ),
-        const Divider(height: 0.5),
         Expanded(
           child: resultsAsync.when(
             loading: () => const _ResultsSkeleton(),
@@ -92,13 +67,104 @@ class _SearchResultsScreenState extends ConsumerState<SearchResultsScreen>
                 controller: _tabs,
                 children: [
                   _TopTab(results: sorted),
-                  _VideosGrid(videos: sorted.videos),
                   _UsersList(users: sorted.users),
+                  _VideosGrid(videos: sorted.videos),
                   _SoundsList(sounds: sorted.sounds),
                   _TagsList(tags: sorted.hashtags),
                 ],
               );
             },
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Result tabs: label, count and an animated underline on the active tab.
+class _ResultsTabBar extends StatelessWidget {
+  const _ResultsTabBar({
+    required this.controller,
+    required this.query,
+    required this.results,
+    required this.onOpenFilters,
+  });
+
+  final TabController controller;
+  final String query;
+  final SearchResults? results;
+  final VoidCallback onOpenFilters;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = results;
+    final total = r == null
+        ? null
+        : r.videos.length + r.users.length + r.sounds.length + r.hashtags.length;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TabBar(
+          controller: controller,
+          isScrollable: true,
+          tabAlignment: TabAlignment.start,
+          indicatorSize: TabBarIndicatorSize.label,
+          indicator: const UnderlineTabIndicator(
+            borderSide: BorderSide(color: colorTextPrimary, width: 2.5),
+            insets: EdgeInsets.symmetric(horizontal: 2),
+          ),
+          dividerColor: Colors.transparent,
+          labelColor: colorTextPrimary,
+          unselectedLabelColor: colorTextSecondaryDark,
+          labelStyle: AppTokens.titleS.copyWith(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w700,
+          ),
+          unselectedLabelStyle: AppTokens.titleS.copyWith(
+            fontSize: 14.5,
+            fontWeight: FontWeight.w500,
+          ),
+          labelPadding: const EdgeInsets.symmetric(horizontal: space10),
+          padding: const EdgeInsets.symmetric(horizontal: space8),
+          tabs: const [
+            Tab(text: 'Top'),
+            Tab(text: 'Utilisateurs'),
+            Tab(text: 'Vidéos'),
+            Tab(text: 'Sons'),
+            Tab(text: 'Hashtags'),
+          ],
+        ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(gutter, space8, space8, space8),
+          child: Row(
+            children: [
+              Expanded(
+                child: Text(
+                  total == null
+                      ? 'Résultats pour « $query »'
+                      : 'Résultats pour « $query » · $total',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: AppTokens.labelS.copyWith(
+                    color: colorTextSecondaryDark,
+                  ),
+                ),
+              ),
+              Pressable(
+                scale: 0.9,
+                onTap: onOpenFilters,
+                semanticLabel: 'Filtres de recherche',
+                child: const Padding(
+                  padding: EdgeInsets.all(space8),
+                  child: ReelIcon(
+                    ReelGlyph.filter,
+                    size: 18,
+                    color: colorTextSecondary,
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
       ],

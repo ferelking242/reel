@@ -26,7 +26,7 @@ class _LikeBurstState extends State<LikeBurst>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 780),
+    duration: const Duration(milliseconds: 900),
   );
 
   @override
@@ -67,56 +67,83 @@ class _BurstPainter extends CustomPainter {
 
   final double progress;
 
-  static const _particles = 9;
+  static const _particles = 12;
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final t = progress.clamp(0.0, 1.0);
 
-    // Main heart: pop in, hold, fade out.
-    final scale = t < 0.28
-        ? Curves.easeOutBack.transform(t / 0.28) * 1.15
-        : 1.15 - (t - 0.28) * 0.25;
-    final opacity = t < 0.65 ? 1.0 : 1 - (t - 0.65) / 0.35;
+    // Main heart: pop past its final size, settle, then fade out.
+    final pop = t < 0.3
+        ? Curves.easeOutBack.transform(t / 0.3) * 1.22
+        : 1.22 - Curves.easeOut.transform((t - 0.3) / 0.7) * 0.16;
+    final opacity = t < 0.7 ? 1.0 : 1 - (t - 0.7) / 0.3;
+    final rotation = (1 - Curves.easeOut.transform(t.clamp(0.0, 0.35) / 0.35)) *
+        -0.22;
 
     canvas.save();
     canvas.translate(center.dx, center.dy);
-    canvas.scale(scale);
-    final heart = _heartPath(52);
+    canvas.rotate(rotation);
+    canvas.scale(pop);
+    final heart = _heartPath(58);
+    canvas.drawPath(
+      heart,
+      Paint()
+        ..color = colorLike.withValues(alpha: opacity.clamp(0.0, 1.0) * 0.55)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18),
+    );
+    canvas.drawPath(
+      heart,
+      Paint()
+        ..color = Colors.white.withValues(alpha: opacity.clamp(0.0, 1.0)),
+    );
     canvas.drawPath(
       heart,
       Paint()
         ..color = colorLike.withValues(alpha: opacity.clamp(0.0, 1.0))
-        ..style = PaintingStyle.fill
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
-    );
-    canvas.drawPath(
-      heart,
-      Paint()..color = Colors.white.withValues(alpha: opacity * 0.92),
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = 2.5,
     );
     canvas.restore();
 
-    // Particles fly outwards then fade.
-    final particleT = ((t - 0.05) / 0.7).clamp(0.0, 1.0);
+    // Expanding ring behind the heart.
+    final ringT = (t / 0.55).clamp(0.0, 1.0);
+    if (ringT < 1) {
+      canvas.drawCircle(
+        center,
+        26 + ringT * 46,
+        Paint()
+          ..color = Colors.white.withValues(alpha: (1 - ringT) * 0.28)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 2 * (1 - ringT) + 0.5,
+      );
+    }
+
+    // Particles fly outwards, spin and shrink.
+    final particleT = ((t - 0.04) / 0.72).clamp(0.0, 1.0);
     if (particleT > 0) {
       for (var i = 0; i < _particles; i++) {
         final angle = (i / _particles) * math.pi * 2 - math.pi / 2;
-        final distance = 26 + particleT * (34 + (i.isEven ? 16 : 0));
-        final offset = center +
-            Offset(math.cos(angle), math.sin(angle)) * distance -
-            const Offset(7, 7);
+        final spread = i.isEven ? 1.0 : 0.72;
+        final distance =
+            (18 + Curves.easeOutCubic.transform(particleT) * 62) * spread;
+        final offset = center + Offset(math.cos(angle), math.sin(angle)) * distance;
         final particleOpacity = (1 - particleT).clamp(0.0, 1.0);
-        final scaleParticle = 0.55 + (1 - particleT) * 0.45;
+        final scaleParticle = 0.35 + (1 - particleT) * 0.5;
+
         canvas.save();
-        canvas.translate(offset.dx + 7, offset.dy + 7);
+        canvas.translate(offset.dx, offset.dy);
+        canvas.rotate(angle + particleT * math.pi);
         canvas.scale(scaleParticle);
-        canvas.translate(-7, -7);
         canvas.drawPath(
-          _heartPath(14),
+          _heartPath(i.isEven ? 13 : 9),
           Paint()
-            ..color = (i.isEven ? colorBrand : Colors.white)
-                .withValues(alpha: particleOpacity),
+            ..color = switch (i % 3) {
+              0 => colorBrand,
+              1 => Colors.white,
+              _ => colorBrandCyan,
+            }.withValues(alpha: particleOpacity),
         );
         canvas.restore();
       }
@@ -137,8 +164,7 @@ class _BurstPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _BurstPainter old) =>
-      old.progress != progress;
+  bool shouldRepaint(covariant _BurstPainter old) => old.progress != progress;
 }
 
 /// Small icon shown when the user pauses a video.

@@ -9,6 +9,7 @@ import '../features/inbox/inbox_screen.dart';
 import '../features/live/live_multi_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/search/search_screen.dart';
+import '../features/settings/settings_screen.dart';
 import '../splash_screen.dart';
 
 /// The router of the standalone app.
@@ -79,6 +80,14 @@ final _routes = <RouteBase>[
       pageBuilder: (context, state) => _slidePage(
         state,
         const LiveMultiScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/settings',
+      name: 'settings',
+      pageBuilder: (context, state) => _slidePage(
+        state,
+        const SettingsScreen(),
       ),
     ),
     GoRoute(

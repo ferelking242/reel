@@ -16,6 +16,7 @@ import 'package:reel/features/live/live_multi_screen.dart';
 import 'package:reel/features/profile/profile_screen.dart';
 import 'package:reel/features/search/search_results_screen.dart';
 import 'package:reel/features/search/search_screen.dart';
+import 'package:reel/features/settings/settings_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 const _phone = Size(390, 844);
@@ -29,6 +30,20 @@ Future<void> _loadFont() async {
     loader.addFont(Future.value(ByteData.view(bytes.buffer)));
   }
   await loader.load();
+
+  // Package fonts are not loaded in widget tests; without this the icons
+  // would all render as empty boxes in the goldens.
+  final symbols = File(
+    '${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev/'
+    'material_symbols_icons-4.2960.0/lib/fonts/MaterialSymbolsRounded.ttf',
+  );
+  if (symbols.existsSync()) {
+    final iconLoader = FontLoader('packages/material_symbols_icons/MaterialSymbolsRounded');
+    iconLoader.addFont(
+      Future.value(ByteData.view(symbols.readAsBytesSync().buffer)),
+    );
+    await iconLoader.load();
+  }
 }
 
 void main() {
@@ -92,5 +107,6 @@ void main() {
       ),
       '08_search_results',
     );
+    await pumpScreen(const SettingsScreen(), '09_settings');
   });
 }

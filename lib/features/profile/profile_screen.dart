@@ -10,13 +10,13 @@ import '../../core/widgets/reel_avatar.dart';
 import '../../core/widgets/reel_bottom_nav.dart';
 import '../../core/widgets/reel_sheet.dart';
 import '../../core/widgets/video_thumbnail.dart';
-import '../../remote/remote_config_provider.dart';
 import '../feed/models/feed_item.dart';
 import '../feed/providers/engagement_provider.dart';
 import '../feed/providers/feed_provider.dart';
 import '../feed/widgets/create_sheet.dart';
 import '../feed/widgets/item_sheet.dart';
-import '../search/providers/search_provider.dart';
+import 'edit_profile_sheet.dart';
+import 'providers/profile_edit_provider.dart';
 import 'providers/profile_provider.dart';
 
 class ProfileScreen extends ConsumerStatefulWidget {
@@ -94,10 +94,10 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
                   dividerColor: Colors.transparent,
                   labelColor: colorTextPrimary,
                   unselectedLabelColor: colorTextSecondaryDark,
-                  tabs: const [
-                    Tab(text: 'Vidéos'),
-                    Tab(text: 'Favoris'),
-                    Tab(text: 'J\'aime'),
+                  tabs: [
+                    Tab(text: 'Vidéos ${feed.length}'),
+                    Tab(text: 'Favoris ${saved.length}'),
+                    Tab(text: 'J\'aime ${liked.length}'),
                   ],
                 ),
               ),
@@ -147,12 +147,7 @@ class _ProfileScreenState extends ConsumerState<ProfileScreen>
     );
   }
 
-  void _showSettings(BuildContext context) {
-    showReelSheet<void>(
-      context,
-      builder: (_) => const _SettingsSheet(),
-    );
-  }
+  void _showSettings(BuildContext context) => context.push('/settings');
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -182,6 +177,7 @@ class _ProfileHeader extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final status = ref.watch(serverStatusProvider);
+    final profile = ref.watch(profileEditProvider);
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -210,11 +206,35 @@ class _ProfileHeader extends ConsumerWidget {
                 ),
               ),
               const SizedBox(width: space4),
-              Text(
-                'Profil',
-                style: AppTokens.titleM.copyWith(color: colorTextPrimary),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    profile.handle,
+                    style: AppTokens.titleM.copyWith(color: colorTextPrimary),
+                  ),
+                  const SizedBox(width: space4),
+                  const ReelIcon(
+                    ReelGlyph.verified,
+                    size: 16,
+                    color: colorVerified,
+                  ),
+                ],
               ),
               const Spacer(),
+              Pressable(
+                scale: 0.88,
+                onTap: () => copyToClipboard(context, 'reel://@toi'),
+                semanticLabel: 'Partager le profil',
+                child: const Padding(
+                  padding: EdgeInsets.all(space8),
+                  child: ReelIcon(
+                    ReelGlyph.qr,
+                    size: 22,
+                    color: colorTextPrimary,
+                  ),
+                ),
+              ),
               Pressable(
                 scale: 0.88,
                 onTap: onOpenSettings,
@@ -222,7 +242,7 @@ class _ProfileHeader extends ConsumerWidget {
                 child: const Padding(
                   padding: EdgeInsets.all(space8),
                   child: ReelIcon(
-                    ReelGlyph.settings,
+                    ReelGlyph.more,
                     size: 22,
                     color: colorTextPrimary,
                   ),
@@ -262,11 +282,7 @@ class _ProfileHeader extends ConsumerWidget {
                 bottom: 0,
                 child: Pressable(
                   scale: 0.9,
-                  onTap: () => showReelToast(
-                    context,
-                    'La modification du profil arrive bientôt',
-                    icon: ReelGlyph.profile,
-                  ),
+                  onTap: () => showEditProfileSheet(context),
                   semanticLabel: 'Modifier la photo',
                   child: Container(
                     width: 28,
@@ -291,40 +307,57 @@ class _ProfileHeader extends ConsumerWidget {
         ),
         const SizedBox(height: space12),
         Center(
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                '@toi',
-                style: AppTokens.titleM.copyWith(color: colorTextPrimary),
-              ),
-              const SizedBox(width: space6),
-              Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: space6,
-                  vertical: 2,
-                ),
-                decoration: BoxDecoration(
-                  color: colorBgCard,
-                  borderRadius: BorderRadius.circular(radiusSm),
-                ),
-                child: Text(
-                  'local',
-                  style: AppTokens.caption.copyWith(
+          child: Text(
+            profile.handle,
+            style: AppTokens.titleM.copyWith(
+              color: colorTextPrimary,
+              fontWeight: FontWeight.w700,
+            ),
+          ),
+        ),
+        const SizedBox(height: space6),
+        Center(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: space40),
+            child: Text(
+              profile.bio.isNotEmpty
+                  ? profile.bio
+                  : (status ?? 'Feed vertical · compte local'),
+              textAlign: TextAlign.center,
+              maxLines: 3,
+              overflow: TextOverflow.ellipsis,
+              style: AppTokens.bodyS.copyWith(color: colorTextSecondaryDark),
+            ),
+          ),
+        ),
+        if (profile.link.isNotEmpty) ...[
+          const SizedBox(height: space6),
+          Center(
+            child: Pressable(
+              scale: 0.96,
+              onTap: () => copyToClipboard(context, profile.link),
+              semanticLabel: 'Copier le lien du profil',
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const ReelIcon(
+                    ReelGlyph.link,
+                    size: 14,
                     color: colorTextSecondaryDark,
                   ),
-                ),
+                  const SizedBox(width: space4),
+                  Text(
+                    profile.link,
+                    style: AppTokens.labelS.copyWith(
+                      color: colorTextPrimary,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ),
-        ),
-        const SizedBox(height: space4),
-        Center(
-          child: Text(
-            status ?? 'Compte local · aucune donnée envoyée',
-            style: AppTokens.labelS.copyWith(color: colorTextSecondaryDark),
-          ),
-        ),
+        ],
         const SizedBox(height: space16),
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: gutter),
@@ -332,11 +365,7 @@ class _ProfileHeader extends ConsumerWidget {
             children: [
               Expanded(
                 child: OutlinedButton(
-                  onPressed: () => showReelToast(
-                    context,
-                    'La modification du profil arrive bientôt',
-                    icon: ReelGlyph.profile,
-                  ),
+                  onPressed: () => showEditProfileSheet(context),
                   style: OutlinedButton.styleFrom(
                     foregroundColor: colorTextPrimary,
                     side: const BorderSide(color: colorDivider),
@@ -370,6 +399,27 @@ class _ProfileHeader extends ConsumerWidget {
                   ),
                   child: const ReelIcon(
                     ReelGlyph.share,
+                    size: 18,
+                    color: colorTextPrimary,
+                  ),
+                ),
+              ),
+              const SizedBox(width: space8),
+              SizedBox(
+                width: 46,
+                height: 38,
+                child: OutlinedButton(
+                  onPressed: onOpenLiked,
+                  style: OutlinedButton.styleFrom(
+                    padding: EdgeInsets.zero,
+                    foregroundColor: colorTextPrimary,
+                    side: const BorderSide(color: colorDivider),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(radiusMd),
+                    ),
+                  ),
+                  child: const ReelIcon(
+                    ReelGlyph.bookmark,
                     size: 18,
                     color: colorTextPrimary,
                   ),
@@ -586,213 +636,6 @@ class _VideoGrid extends StatelessWidget {
           ),
         );
       },
-    );
-  }
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Settings
-// ─────────────────────────────────────────────────────────────────────────────
-
-class _SettingsSheet extends ConsumerWidget {
-  const _SettingsSheet();
-
-  @override
-  Widget build(BuildContext context, WidgetRef ref) {
-    final config = ref.watch(remoteConfigProvider).asData?.value;
-    final muted = ref.watch(feedMutedProvider);
-
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(gutter, space4, gutter, space32),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Paramètres',
-            style: AppTokens.titleM.copyWith(color: colorTextPrimary),
-          ),
-          const SizedBox(height: space16),
-          _SettingsGroup(
-            children: [
-              _SettingsTile(
-                icon: ReelGlyph.settings,
-                title: 'Serveur Watchtower',
-                subtitle: config == null || config.baseUrl.isEmpty
-                    ? 'Non configuré'
-                    : config.baseUrl,
-                onTap: () {
-                  Navigator.of(context).maybePop();
-                  context.push('/connect');
-                },
-              ),
-              _SettingsTile(
-                icon: ReelGlyph.grid,
-                title: 'Source active',
-                subtitle: (config?.selectedSourceId.isNotEmpty ?? false)
-                    ? config!.selectedSourceId
-                    : 'Automatique',
-                onTap: () {
-                  Navigator.of(context).maybePop();
-                  context.push('/connect');
-                },
-              ),
-            ],
-          ),
-          const SizedBox(height: space12),
-          _SettingsGroup(
-            children: [
-              SwitchListTile.adaptive(
-                value: !muted,
-                onChanged: (_) => ref.read(feedMutedProvider.notifier).toggle(),
-                title: Text(
-                  'Son du feed',
-                  style: AppTokens.bodyS.copyWith(color: colorTextPrimary),
-                ),
-                subtitle: Text(
-                  'Lecture avec audio au démarrage',
-                  style: AppTokens.labelS.copyWith(
-                    color: colorTextSecondaryDark,
-                  ),
-                ),
-                activeTrackColor: colorBrand,
-                contentPadding: const EdgeInsets.symmetric(
-                  horizontal: space16,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: space12),
-          _SettingsGroup(
-            children: [
-              _SettingsTile(
-                icon: ReelGlyph.trash,
-                title: 'Effacer mes données locales',
-                subtitle: 'Likes, favoris, abonnements, commentaires',
-                destructive: true,
-                onTap: () => _confirmClear(context, ref),
-              ),
-              _SettingsTile(
-                icon: ReelGlyph.warning,
-                title: 'À propos de Reel',
-                subtitle: 'Version 1.0.0 · Watchtower SDK',
-                onTap: () => showReelToast(
-                  context,
-                  'Reel 1.0.0 — UI inspirée des feeds verticaux modernes',
-                  icon: ReelGlyph.effects,
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Future<void> _confirmClear(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: colorBgElevated,
-        title: Text(
-          'Effacer les données locales ?',
-          style: AppTokens.titleS.copyWith(color: colorTextPrimary),
-        ),
-        content: Text(
-          'Tes likes, favoris, abonnements, commentaires et recherches seront supprimés de cet appareil.',
-          style: AppTokens.bodyS.copyWith(color: colorTextSecondary),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(false),
-            child: Text(
-              'Annuler',
-              style: AppTokens.labelM.copyWith(color: colorTextSecondary),
-            ),
-          ),
-          TextButton(
-            onPressed: () => Navigator.of(dialogContext).pop(true),
-            child: Text(
-              'Effacer',
-              style: AppTokens.labelM.copyWith(
-                color: colorBrand,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed != true) return;
-    await ref.read(engagementProvider.notifier).clearAll();
-    await ref.read(commentsProvider.notifier).clearAll();
-    ref.read(searchHistoryProvider.notifier).clear();
-    ref.read(hiddenItemsProvider.notifier).clear();
-    if (!context.mounted) return;
-    showReelToast(context, 'Données locales effacées');
-    Navigator.of(context).maybePop();
-  }
-}
-
-class _SettingsGroup extends StatelessWidget {
-  const _SettingsGroup({required this.children});
-
-  final List<Widget> children;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      decoration: BoxDecoration(
-        color: colorBgCard,
-        borderRadius: BorderRadius.circular(radiusLg),
-      ),
-      child: Column(children: children),
-    );
-  }
-}
-
-class _SettingsTile extends StatelessWidget {
-  const _SettingsTile({
-    required this.icon,
-    required this.title,
-    required this.subtitle,
-    required this.onTap,
-    this.destructive = false,
-  });
-
-  final ReelGlyph icon;
-  final String title;
-  final String subtitle;
-  final VoidCallback onTap;
-  final bool destructive;
-
-  @override
-  Widget build(BuildContext context) {
-    return ListTile(
-      onTap: onTap,
-      contentPadding: const EdgeInsets.symmetric(horizontal: space16),
-      leading: ReelIcon(
-        icon,
-        size: 20,
-        color: destructive ? colorBrand : colorTextSecondary,
-      ),
-      title: Text(
-        title,
-        style: AppTokens.bodyS.copyWith(
-          color: destructive ? colorBrand : colorTextPrimary,
-        ),
-      ),
-      subtitle: Text(
-        subtitle,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: AppTokens.labelS.copyWith(color: colorTextSecondaryDark),
-      ),
-      trailing: const ReelIcon(
-        ReelGlyph.chevronRight,
-        size: 16,
-        color: colorTextSecondaryDark,
-      ),
     );
   }
 }

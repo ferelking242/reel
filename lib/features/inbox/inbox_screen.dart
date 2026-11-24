@@ -8,6 +8,7 @@ import '../../core/widgets/pressable.dart';
 import '../../core/widgets/reel_avatar.dart';
 import '../../core/widgets/reel_bottom_nav.dart';
 import '../../core/widgets/reel_sheet.dart';
+import '../../core/widgets/staggered_entrance.dart';
 import '../feed/providers/feed_provider.dart';
 import '../feed/widgets/create_sheet.dart';
 import '../feed/widgets/item_sheet.dart';
@@ -82,23 +83,42 @@ class InboxScreen extends ConsumerWidget {
               ),
             ),
             Expanded(
-              child: entries.isEmpty
-                  ? const _InboxEmpty()
-                  : ListView.separated(
-                      padding: const EdgeInsets.only(bottom: space32),
-                      itemCount: entries.length,
-                      separatorBuilder: (_, __) =>
-                          const Divider(height: 0.5, indent: 76),
-                      itemBuilder: (context, index) {
-                        final entry = entries[index];
-                        final isUnread = !seen.contains(entry.id);
-                        return _ActivityTile(
-                          entry: entry,
-                          unread: isUnread,
-                          onTap: () => _open(context, ref, entry),
-                        );
-                      },
-                    ),
+              child: AnimatedSwitcher(
+                duration: durationNormal,
+                switchInCurve: ReelCurves.decelerate,
+                switchOutCurve: ReelCurves.accelerate,
+                transitionBuilder: (child, animation) => FadeTransition(
+                  opacity: animation,
+                  child: SlideTransition(
+                    position: Tween<Offset>(
+                      begin: const Offset(0, 0.03),
+                      end: Offset.zero,
+                    ).animate(animation),
+                    child: child,
+                  ),
+                ),
+                child: entries.isEmpty
+                    ? const _InboxEmpty(key: ValueKey('empty'))
+                    : ListView.separated(
+                        key: ValueKey('list-$tab'),
+                        padding: const EdgeInsets.only(bottom: space32),
+                        itemCount: entries.length,
+                        separatorBuilder: (_, __) =>
+                            const Divider(height: 0.5, indent: 76),
+                        itemBuilder: (context, index) {
+                          final entry = entries[index];
+                          final isUnread = !seen.contains(entry.id);
+                          return StaggeredEntrance(
+                            index: index,
+                            child: _ActivityTile(
+                              entry: entry,
+                              unread: isUnread,
+                              onTap: () => _open(context, ref, entry),
+                            ),
+                          );
+                        },
+                      ),
+              ),
             ),
           ],
         ),
@@ -326,7 +346,7 @@ class _Leading extends StatelessWidget {
 }
 
 class _InboxEmpty extends StatelessWidget {
-  const _InboxEmpty();
+  const _InboxEmpty({super.key});
 
   @override
   Widget build(BuildContext context) {
