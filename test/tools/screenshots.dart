@@ -8,6 +8,7 @@ import 'package:reel/core/theme/tokens.dart';
 import 'package:reel/features/connect/connect_screen.dart';
 import 'package:reel/features/feed/feed_screen.dart';
 import 'package:reel/features/feed/providers/feed_provider.dart';
+import 'package:reel/features/feed/widgets/like_burst.dart';
 
 import '../fixtures/feed_fixture.dart';
 import 'package:reel/features/friends/friends_screen.dart';
@@ -108,5 +109,14 @@ void main() {
       '08_search_results',
     );
     await pumpScreen(const SettingsScreen(), '09_settings');
+    await pumpScreen(
+      const Stack(
+        children: [
+          Positioned.fill(child: ColoredBox(color: colorBgBase)),
+          LikeBurst(position: Offset(195, 400)),
+        ],
+      ),
+      '10_like_burst',
+    );
   });
 }

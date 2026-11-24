@@ -127,17 +127,18 @@ class _BurstPainter extends CustomPainter {
         final angle = (i / _particles) * math.pi * 2 - math.pi / 2;
         final spread = i.isEven ? 1.0 : 0.72;
         final distance =
-            (18 + Curves.easeOutCubic.transform(particleT) * 62) * spread;
+            (20 + Curves.easeOutCubic.transform(particleT) * 78) * spread;
         final offset = center + Offset(math.cos(angle), math.sin(angle)) * distance;
-        final particleOpacity = (1 - particleT).clamp(0.0, 1.0);
-        final scaleParticle = 0.35 + (1 - particleT) * 0.5;
+        final particleOpacity =
+            (1 - particleT * particleT).clamp(0.0, 1.0);
+        final scaleParticle = 0.5 + (1 - particleT) * 0.7;
 
         canvas.save();
         canvas.translate(offset.dx, offset.dy);
         canvas.rotate(angle + particleT * math.pi);
         canvas.scale(scaleParticle);
         canvas.drawPath(
-          _heartPath(i.isEven ? 13 : 9),
+          _heartPath(i.isEven ? 18 : 12),
           Paint()
             ..color = switch (i % 3) {
               0 => colorBrand,
