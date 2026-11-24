@@ -35,22 +35,10 @@ dependencies:
   hive_flutter: ^1.1.0
   shared_preferences: ^2.3.5
 
-  # ── Video — même fork media_kit que watchtower ───────────────────────────────
-  media_kit:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: media_kit
-      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
-  media_kit_video:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: media_kit_video
-      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
-  media_kit_libs_video:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: libs/universal/media_kit_libs_video
-      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
+  # ── Vidéo — mêmes versions que watchtower, pour une résolution unique ───────
+  media_kit:            1.2.2
+  media_kit_video:      2.0.0
+  media_kit_libs_video: 1.0.7
 
   # ── UI ───────────────────────────────────────────────────────────────────────
   flex_color_scheme:    ^8.3.1
@@ -64,25 +52,6 @@ dependencies:
   path_provider:    ^2.1.5
   package_info_plus: ^9.0.1
   intl:             ^0.20.2
-
-dependency_overrides:
-  # Force tous les packages media_kit à utiliser exactement le même commit.
-  # Sans ça, media_kit_video résout media_kit à HEAD → conflit avec notre pin.
-  media_kit:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: media_kit
-      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
-  media_kit_video:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: media_kit_video
-      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
-  media_kit_libs_video:
-    git:
-      url: https://github.com/kodjodevf/media-kit.git
-      path: libs/universal/media_kit_libs_video
-      ref: 0596bb4a94017a7c380f068a1cf6eb6ac7b3199a
 
 dev_dependencies:
   flutter_test:

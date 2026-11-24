@@ -12,25 +12,21 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 /// A layout as an extension can declare it: the Reel renderer, a live tab, and
 /// no like/comment endpoints (RedGIFs-style).
-final _restricted = UiContract(
-  schemaVersion: 1,
-  id: 'redgifs',
-  dock: UiContract.fallback.dock,
-  playerAutoplay: true,
-  playerLoop: true,
-  playerMuted: false,
-  renderer: ReelRenderer.reel,
-  capabilities: ExtensionCapabilities(
-    live: true,
-    views: true,
-    likes: false,
-    comments: false,
-    shares: false,
-    sounds: true,
-    download: false,
-    follow: true,
-  ),
-);
+final _restricted = UiContract.fromJson({
+  'schemaVersion': 1,
+  'id': 'redgifs',
+  'renderer': 'reel',
+  'capabilities': {
+    'live': true,
+    'views': true,
+    'likes': false,
+    'comments': false,
+    'shares': false,
+    'sounds': true,
+    'download': false,
+    'follow': true,
+  },
+});
 
 Widget _wrap(Widget child, {required UiContract contract}) {
   return ProviderScope(
