@@ -41,7 +41,7 @@ et servent de référence visuelle.
 lib/
 ├── main.dart / app.dart / shell.dart / splash_screen.dart
 ├── core/
-│   ├── icons/reel_icons.dart     ← Jeu d'icônes vectorielles maison
+│   ├── icons/reel_icons.dart     ← Jeu d'icônes vectorielles maison (grille 24 dp)
 │   ├── theme/tokens.dart         ← Couleurs, espacements, durées, courbes
 │   ├── utils/formatters.dart     ← Compteurs, dates relatives, tailles
 │   └── widgets/                  ← Avatar, bouton suivre, feuilles, nav, skeletons
@@ -57,6 +57,14 @@ lib/
 ├── router/router.dart            ← Navigation (go_router)
 └── utils/log/                    ← Logger fichier
 ```
+
+### Typographie
+
+L'interface utilise **TikTok Sans**, la police officielle de TikTok publiée sous
+[SIL Open Font License 1.1](assets/fonts/OFL.txt). Les fichiers livrés dans
+`assets/fonts/` sont des instances statiques (400/500/600/700) générées depuis la
+variable font, afin que Flutter sélectionne la bonne graisse. Aucun autre actif
+(TikTok Display/Text, icônes, sons) n'est redistribué.
 
 ## Prérequis
 

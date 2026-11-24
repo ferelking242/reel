@@ -93,3 +93,18 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+
+  # TikTok Sans — police officielle de TikTok, sous SIL Open Font License 1.1
+  # (voir assets/fonts/OFL.txt). Instances statiques générées depuis la
+  # variable font pour que Flutter sélectionne les graisses correctement.
+  fonts:
+    - family: TikTokSans
+      fonts:
+        - asset: assets/fonts/TikTokSans-Regular.otf
+          weight: 400
+        - asset: assets/fonts/TikTokSans-Medium.otf
+          weight: 500
+        - asset: assets/fonts/TikTokSans-SemiBold.otf
+          weight: 600
+        - asset: assets/fonts/TikTokSans-Bold.otf
+          weight: 700

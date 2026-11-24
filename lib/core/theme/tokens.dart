@@ -5,6 +5,10 @@ import 'package:flutter/material.dart';
 /// Colours, type scale, spacing, radii and motion are defined once here so
 /// every screen shares the same visual rhythm.
 abstract class AppTokens {
+  // ─── Typography ──────────────────────────────────────────────────────────
+  /// TikTok Sans (OFL 1.1) — bundled in `assets/fonts`.
+  static const String fontFamily = 'TikTokSans';
+
   // ─── Brand ───────────────────────────────────────────────────────────────
   static const colorBrand = Color(0xFFFE2C55);
   static const colorBrandCyan = Color(0xFF25F4EE);
@@ -89,48 +93,57 @@ abstract class AppTokens {
 
   // ─── Type scale ──────────────────────────────────────────────────────────
   static const TextStyle display = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 28,
     fontWeight: FontWeight.w800,
     height: 1.2,
     letterSpacing: -0.4,
   );
   static const TextStyle titleL = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 22,
     fontWeight: FontWeight.w700,
     height: 1.25,
     letterSpacing: -0.2,
   );
   static const TextStyle titleM = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 17,
     fontWeight: FontWeight.w600,
     height: 1.3,
   );
   static const TextStyle titleS = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 15,
     fontWeight: FontWeight.w700,
     height: 1.3,
   );
   static const TextStyle bodyM = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 15,
     fontWeight: FontWeight.w400,
     height: 1.4,
   );
   static const TextStyle bodyS = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 13,
     fontWeight: FontWeight.w400,
     height: 1.4,
   );
   static const TextStyle labelM = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 12,
     fontWeight: FontWeight.w600,
     height: 1.2,
   );
   static const TextStyle labelS = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 11,
     fontWeight: FontWeight.w500,
     height: 1.2,
   );
   static const TextStyle caption = TextStyle(
+    fontFamily: fontFamily,
     fontSize: 10,
     fontWeight: FontWeight.w500,
     height: 1.2,

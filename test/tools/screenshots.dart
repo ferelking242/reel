@@ -18,11 +18,13 @@ import 'package:shared_preferences/shared_preferences.dart';
 const _phone = Size(390, 844);
 
 Future<void> _loadFont() async {
-  final bytes = File(
-    '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
-  ).readAsBytesSync();
-  final loader = FontLoader('Roboto')
-    ..addFont(Future.value(ByteData.view(bytes.buffer)));
+  final loader = FontLoader(AppTokens.fontFamily);
+  for (final weight in ['Regular', 'Medium', 'SemiBold', 'Bold']) {
+    final bytes = File(
+      'assets/fonts/TikTokSans-$weight.otf',
+    ).readAsBytesSync();
+    loader.addFont(Future.value(ByteData.view(bytes.buffer)));
+  }
   await loader.load();
 }
 
@@ -51,7 +53,7 @@ void main() {
           child: MaterialApp(
             debugShowCheckedModeBanner: false,
             theme: ThemeData(
-              fontFamily: 'Roboto',
+              fontFamily: AppTokens.fontFamily,
               brightness: Brightness.dark,
               scaffoldBackgroundColor: colorBgBase,
             ),
