@@ -117,12 +117,22 @@ class _LiveEntry extends StatelessWidget {
 class _FeedTabs extends StatelessWidget {
   const _FeedTabs({required this.activeTab, required this.onSelect});
 
+  /// Provider values, in display order: 1 = « Suivis », 0 = « Pour toi ».
+  static const _tabs = [
+    (label: 'Suivis', value: 1),
+    (label: 'Pour toi', value: 0),
+  ];
+
   final int activeTab;
   final ValueChanged<int> onSelect;
 
   static const _gap = space20;
 
-  static double _measure(BuildContext context, String label, {bool bold = false}) {
+  static double _measure(
+    BuildContext context,
+    String label, {
+    required bool bold,
+  }) {
     final style = DefaultTextStyle.of(context).style.merge(
           TextStyle(
             fontSize: 16,
@@ -140,13 +150,13 @@ class _FeedTabs extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const labels = ['Suivis', 'Pour toi'];
+    final activeIndex = activeTab == 1 ? 0 : 1;
     final widths = [
-      for (var i = 0; i < labels.length; i++)
-        _measure(context, labels[i], bold: activeTab == i),
+      for (var i = 0; i < _tabs.length; i++)
+        _measure(context, _tabs[i].label, bold: activeIndex == i),
     ];
     final total = widths[0] + _gap + widths[1];
-    final activeCenter = activeTab == 0
+    final activeCenter = activeIndex == 0
         ? widths[0] / 2
         : widths[0] + _gap + widths[1] / 2;
     // -1 (left edge) … 1 (right edge); the underline follows the label centre.
@@ -157,12 +167,12 @@ class _FeedTabs extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            for (var i = 0; i < labels.length; i++) ...[
+            for (var i = 0; i < _tabs.length; i++) ...[
               if (i > 0) const SizedBox(width: _gap),
               _FeedTab(
-                label: labels[i],
-                active: activeTab == i,
-                onTap: () => onSelect(i),
+                label: _tabs[i].label,
+                active: activeIndex == i,
+                onTap: () => onSelect(_tabs[i].value),
               ),
             ],
           ],

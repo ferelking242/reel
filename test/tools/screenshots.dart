@@ -124,7 +124,8 @@ void main() {
         ],
       ),
       '10_like_burst',
-      settle: const Duration(milliseconds: 400),
+      // Capture the heart at full size, mid-hold.
+      settle: const Duration(milliseconds: 60),
     );
   });
 }

@@ -6,8 +6,7 @@ import '../../../core/theme/tokens.dart';
 /// Heart animation played on a double tap.
 ///
 /// Mirrors the reference app: a single big white heart pops at [position],
-/// overshoots slightly, holds, then lifts and fades while a soft shockwave
-/// expands behind it.
+/// overshoots slightly, holds, then lifts and fades out.
 class LikeBurst extends StatefulWidget {
   const LikeBurst({
     super.key,
@@ -44,10 +43,10 @@ class _LikeBurstState extends State<LikeBurst>
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: widget.position.dx - 70,
-      top: widget.position.dy - 70,
-      width: 140,
-      height: 140,
+      left: widget.position.dx - 90,
+      top: widget.position.dy - 90,
+      width: 180,
+      height: 180,
       child: IgnorePointer(
         child: AnimatedBuilder(
           animation: _controller,
@@ -75,33 +74,21 @@ class _BurstPainter extends CustomPainter {
     final settle = t <= 0.22 ? 0.0 : ((t - 0.22) / 0.36).clamp(0.0, 1.0);
     final fade = t < 0.58 ? 0.0 : ((t - 0.58) / 0.42).clamp(0.0, 1.0);
 
-    final scale = (0.35 + popIn * 0.75) - settle * 0.10 + fade * 0.16;
+    final scale = (0.42 + popIn * 0.64) - settle * 0.06 + fade * 0.12;
     final opacity = popIn * (1 - Curves.easeIn.transform(fade));
     final lift = Curves.easeIn.transform(fade) * -14;
     final rotation = (1 - popIn) * -0.12;
-
-    final ring = (t / 0.42).clamp(0.0, 1.0);
-    if (ring < 1) {
-      canvas.drawCircle(
-        center,
-        18 + Curves.easeOutCubic.transform(ring) * 52,
-        Paint()
-          ..color = Colors.white.withValues(alpha: (1 - ring) * 0.18)
-          ..style = PaintingStyle.stroke
-          ..strokeWidth = 1.5 + (1 - ring) * 2.5,
-      );
-    }
 
     canvas.save();
     canvas.translate(center.dx, center.dy + lift);
     canvas.rotate(rotation);
     canvas.scale(scale);
-    final heart = _heartPath(64);
+    final heart = _heartPath(116);
     canvas.drawPath(
       heart,
       Paint()
-        ..color = Colors.black.withValues(alpha: opacity * 0.28)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+        ..color = Colors.black.withValues(alpha: opacity * 0.32)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 14),
     );
     canvas.drawPath(
       heart,

@@ -5,6 +5,8 @@ import 'package:reel/core/icons/reel_icons.dart';
 import 'package:reel/core/icons/tik_glyphs.dart';
 import 'package:reel/core/theme/tokens.dart';
 import 'package:reel/core/widgets/reel_bottom_nav.dart';
+import 'package:reel/features/feed/providers/feed_provider.dart';
+import 'package:reel/features/feed/widgets/feed_header.dart';
 import 'package:reel/features/feed/widgets/feed_page.dart';
 import 'package:reel/features/feed/widgets/like_burst.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -100,6 +102,34 @@ void main() {
       await tester.pump(const Duration(milliseconds: 400));
 
       expect(find.byType(CircularProgressIndicator), findsNothing);
+    });
+  });
+
+  group('tabs', () {
+    testWidgets('each label selects its own feed', (tester) async {
+      final container = ProviderContainer();
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ThemeData.dark().copyWith(
+            scaffoldBackgroundColor: colorBgBase,
+          ),
+          home: const Scaffold(body: FeedHeader()),
+        ),
+      ));
+      await tester.pump();
+
+      // « Suivis » is provider value 1, « Pour toi » is 0.
+      expect(container.read(feedTabProvider), 0);
+      await tester.tap(find.text('Suivis'));
+      await tester.pump();
+      expect(container.read(feedTabProvider), 1);
+      await tester.tap(find.text('Pour toi'));
+      await tester.pump();
+      expect(container.read(feedTabProvider), 0);
+      expect(tester.takeException(), isNull);
     });
   });
 
