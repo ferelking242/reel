@@ -295,6 +295,7 @@ class _FeedBackground extends StatelessWidget {
           ),
         if (controller != null && player != null)
           _VideoLayer(
+            key: ValueKey(item.id),
             player: player!,
             controller: controller!,
             poster: item.thumbnailUrl.isEmpty
@@ -308,6 +309,7 @@ class _FeedBackground extends StatelessWidget {
 
 class _VideoLayer extends StatefulWidget {
   const _VideoLayer({
+    super.key,
     required this.player,
     required this.controller,
     required this.poster,
@@ -331,13 +333,25 @@ class _VideoLayerState extends State<_VideoLayer> {
   @override
   void initState() {
     super.initState();
-    _hasFrame = widget.player.state.position > Duration.zero;
-    _positionSub = widget.player.stream.position.listen((position) {
+    _watch(widget.player);
+  }
+
+  @override
+  void didUpdateWidget(covariant _VideoLayer oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.player != widget.player) _watch(widget.player);
+  }
+
+  void _watch(Player player) {
+    _positionSub?.cancel();
+    _playingSub?.cancel();
+    _hasFrame = player.state.position > Duration.zero;
+    _positionSub = player.stream.position.listen((position) {
       if (!_hasFrame && position > Duration.zero) {
         setState(() => _hasFrame = true);
       }
     });
-    _playingSub = widget.player.stream.playing.listen((playing) {
+    _playingSub = player.stream.playing.listen((playing) {
       if (!_hasFrame && playing) {
         // Audio can start a hair before the first frame; reveal on the next
         // tick instead of flashing a black rectangle.
