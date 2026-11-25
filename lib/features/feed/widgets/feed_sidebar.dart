@@ -139,30 +139,7 @@ class _AvatarWithFollow extends StatefulWidget {
   State<_AvatarWithFollow> createState() => _AvatarWithFollowState();
 }
 
-class _AvatarWithFollowState extends State<_AvatarWithFollow>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _controller;
-
-  @override
-  void initState() {
-    super.initState();
-    _controller = AnimationController(vsync: this, duration: durationSlow);
-  }
-
-  @override
-  void didUpdateWidget(covariant _AvatarWithFollow oldWidget) {
-    super.didUpdateWidget(oldWidget);
-    if (!oldWidget.following && widget.following) {
-      _controller.forward(from: 0);
-    }
-  }
-
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
+class _AvatarWithFollowState extends State<_AvatarWithFollow> {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
@@ -178,7 +155,6 @@ class _AvatarWithFollowState extends State<_AvatarWithFollow>
             size: 50,
             borderColor: colorTextPrimary,
             borderWidth: 1.5,
-            showVerified: widget.item.authorVerified,
             onTap: () => showReelToast(
               context,
               'Profil de ${widget.item.authorUsername}',
@@ -187,51 +163,115 @@ class _AvatarWithFollowState extends State<_AvatarWithFollow>
           ),
           Positioned(
             bottom: 0,
-            child: widget.following
-                ? ScaleTransition(
-                    scale: CurvedAnimation(
-                      parent: _controller,
-                      curve: Curves.easeOutBack,
-                    ),
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: const BoxDecoration(
-                        color: colorBgElevated,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: ReelIcon(
-                          ReelGlyph.check,
-                          size: 12,
-                          color: colorTextSecondary,
-                        ),
-                      ),
-                    ),
-                  )
-                : Pressable(
-                    scale: 0.85,
-                    onTap: widget.onToggleFollow,
-                    semanticLabel: 'Suivre ${widget.item.authorUsername}',
-                    child: Container(
-                      width: 22,
-                      height: 22,
-                      decoration: const BoxDecoration(
-                        color: colorBrand,
-                        shape: BoxShape.circle,
-                      ),
-                      child: const Center(
-                        child: ReelIcon(
-                          ReelGlyph.plus,
-                          size: 12,
-                          color: Colors.white,
-                          strokeWidth: 3.4,
-                        ),
+            child: _FollowBadge(
+              following: widget.following,
+              onTap: widget.onToggleFollow,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Follow badge: the « + » rotates a quarter turn and morphs into a check.
+class _FollowBadge extends StatefulWidget {
+  const _FollowBadge({required this.following, required this.onTap});
+
+  final bool following;
+  final VoidCallback onTap;
+
+  @override
+  State<_FollowBadge> createState() => _FollowBadgeState();
+}
+
+class _FollowBadgeState extends State<_FollowBadge>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 260),
+    value: widget.following ? 1 : 0,
+  );
+
+  late final Animation<double> _plusTurn = Tween<double>(
+    begin: 0,
+    end: 1,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeInBack));
+
+  late final Animation<double> _checkTurn = Tween<double>(
+    begin: -1,
+    end: 0,
+  ).animate(CurvedAnimation(parent: _controller, curve: Curves.easeOutBack));
+
+  @override
+  void didUpdateWidget(covariant _FollowBadge oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.following != widget.following) {
+      widget.following ? _controller.forward() : _controller.reverse();
+    }
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Pressable(
+      scale: 0.85,
+      onTap: widget.onTap,
+      semanticLabel: widget.following
+          ? 'Ne plus suivre'
+          : 'Suivre',
+      child: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          final t = _controller.value;
+          return Container(
+            width: 22,
+            height: 22,
+            decoration: BoxDecoration(
+              color: Color.lerp(colorBrand, colorBgElevated, t),
+              shape: BoxShape.circle,
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.16 * t),
+              ),
+            ),
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Opacity(
+                  opacity: (1 - t).clamp(0.0, 1.0),
+                  child: Transform.rotate(
+                    angle: _plusTurn.value * 1.5708,
+                    child: Transform.scale(
+                      scale: 1 - 0.3 * t,
+                      child: const ReelIcon(
+                        ReelGlyph.plus,
+                        size: 12,
+                        color: Colors.white,
+                        strokeWidth: 3.4,
                       ),
                     ),
                   ),
-          ),
-        ],
+                ),
+                Opacity(
+                  opacity: t,
+                  child: Transform.rotate(
+                    angle: _checkTurn.value * 1.5708,
+                    child: const ReelIcon(
+                      ReelGlyph.check,
+                      size: 12,
+                      color: colorTextSecondary,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
       ),
     );
   }
@@ -308,7 +348,7 @@ class _SidebarActionState extends State<_SidebarAction>
             scale: _scale,
             child: ReelIcon(
               widget.glyph,
-              size: 32,
+              size: 34,
               color: color,
               filled: widget.active,
             ),

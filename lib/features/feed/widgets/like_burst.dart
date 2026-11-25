@@ -1,5 +1,3 @@
-import 'dart:math' as math;
-
 import 'package:flutter/material.dart';
 
 import '../../../core/icons/reel_icons.dart';
@@ -7,7 +5,9 @@ import '../../../core/theme/tokens.dart';
 
 /// Heart animation played on a double tap.
 ///
-/// A big heart pops at [position] while small hearts burst outwards.
+/// Mirrors the reference app: a single big white heart pops at [position],
+/// overshoots slightly, holds, then lifts and fades while a soft shockwave
+/// expands behind it.
 class LikeBurst extends StatefulWidget {
   const LikeBurst({
     super.key,
@@ -26,7 +26,7 @@ class _LikeBurstState extends State<LikeBurst>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller = AnimationController(
     vsync: this,
-    duration: const Duration(milliseconds: 900),
+    duration: const Duration(milliseconds: 820),
   );
 
   @override
@@ -44,18 +44,16 @@ class _LikeBurstState extends State<LikeBurst>
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: widget.position.dx - 80,
-      top: widget.position.dy - 80,
-      width: 160,
-      height: 160,
+      left: widget.position.dx - 70,
+      top: widget.position.dy - 70,
+      width: 140,
+      height: 140,
       child: IgnorePointer(
         child: AnimatedBuilder(
           animation: _controller,
-          builder: (context, _) {
-            return CustomPaint(
-              painter: _BurstPainter(progress: _controller.value),
-            );
-          },
+          builder: (context, _) => CustomPaint(
+            painter: _BurstPainter(progress: _controller.value),
+          ),
         ),
       ),
     );
@@ -67,100 +65,63 @@ class _BurstPainter extends CustomPainter {
 
   final double progress;
 
-  static const _particles = 12;
-
   @override
   void paint(Canvas canvas, Size size) {
-    final center = size.center(Offset.zero);
     final t = progress.clamp(0.0, 1.0);
+    final center = size.center(Offset.zero);
 
-    // Main heart: pop past its final size, settle, then fade out.
-    final pop = t < 0.3
-        ? Curves.easeOutBack.transform(t / 0.3) * 1.22
-        : 1.22 - Curves.easeOut.transform((t - 0.3) / 0.7) * 0.16;
-    final opacity = t < 0.7 ? 1.0 : 1 - (t - 0.7) / 0.3;
-    final rotation = (1 - Curves.easeOut.transform(t.clamp(0.0, 0.35) / 0.35)) *
-        -0.22;
+    // 0 → 22% pop in with overshoot, 22 → 58% hold, 58 → 100% lift and fade.
+    final popIn = Curves.easeOutBack.transform((t / 0.22).clamp(0.0, 1.0));
+    final settle = t <= 0.22 ? 0.0 : ((t - 0.22) / 0.36).clamp(0.0, 1.0);
+    final fade = t < 0.58 ? 0.0 : ((t - 0.58) / 0.42).clamp(0.0, 1.0);
 
-    canvas.save();
-    canvas.translate(center.dx, center.dy);
-    canvas.rotate(rotation);
-    canvas.scale(pop);
-    final heart = _heartPath(58);
-    canvas.drawPath(
-      heart,
-      Paint()
-        ..color = colorLike.withValues(alpha: opacity.clamp(0.0, 1.0) * 0.55)
-        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 18),
-    );
-    canvas.drawPath(
-      heart,
-      Paint()
-        ..color = Colors.white.withValues(alpha: opacity.clamp(0.0, 1.0)),
-    );
-    canvas.drawPath(
-      heart,
-      Paint()
-        ..color = colorLike.withValues(alpha: opacity.clamp(0.0, 1.0))
-        ..style = PaintingStyle.stroke
-        ..strokeWidth = 2.5,
-    );
-    canvas.restore();
+    final scale = (0.35 + popIn * 0.75) - settle * 0.10 + fade * 0.16;
+    final opacity = popIn * (1 - Curves.easeIn.transform(fade));
+    final lift = Curves.easeIn.transform(fade) * -14;
+    final rotation = (1 - popIn) * -0.12;
 
-    // Expanding ring behind the heart.
-    final ringT = (t / 0.55).clamp(0.0, 1.0);
-    if (ringT < 1) {
+    final ring = (t / 0.42).clamp(0.0, 1.0);
+    if (ring < 1) {
       canvas.drawCircle(
         center,
-        26 + ringT * 46,
+        18 + Curves.easeOutCubic.transform(ring) * 52,
         Paint()
-          ..color = Colors.white.withValues(alpha: (1 - ringT) * 0.28)
+          ..color = Colors.white.withValues(alpha: (1 - ring) * 0.18)
           ..style = PaintingStyle.stroke
-          ..strokeWidth = 2 * (1 - ringT) + 0.5,
+          ..strokeWidth = 1.5 + (1 - ring) * 2.5,
       );
     }
 
-    // Particles fly outwards, spin and shrink.
-    final particleT = ((t - 0.04) / 0.72).clamp(0.0, 1.0);
-    if (particleT > 0) {
-      for (var i = 0; i < _particles; i++) {
-        final angle = (i / _particles) * math.pi * 2 - math.pi / 2;
-        final spread = i.isEven ? 1.0 : 0.72;
-        final distance =
-            (20 + Curves.easeOutCubic.transform(particleT) * 78) * spread;
-        final offset = center + Offset(math.cos(angle), math.sin(angle)) * distance;
-        final particleOpacity =
-            (1 - particleT * particleT).clamp(0.0, 1.0);
-        final scaleParticle = 0.5 + (1 - particleT) * 0.7;
-
-        canvas.save();
-        canvas.translate(offset.dx, offset.dy);
-        canvas.rotate(angle + particleT * math.pi);
-        canvas.scale(scaleParticle);
-        canvas.drawPath(
-          _heartPath(i.isEven ? 18 : 12),
-          Paint()
-            ..color = switch (i % 3) {
-              0 => colorBrand,
-              1 => Colors.white,
-              _ => colorBrandCyan,
-            }.withValues(alpha: particleOpacity),
-        );
-        canvas.restore();
-      }
-    }
+    canvas.save();
+    canvas.translate(center.dx, center.dy + lift);
+    canvas.rotate(rotation);
+    canvas.scale(scale);
+    final heart = _heartPath(64);
+    canvas.drawPath(
+      heart,
+      Paint()
+        ..color = Colors.black.withValues(alpha: opacity * 0.28)
+        ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 10),
+    );
+    canvas.drawPath(
+      heart,
+      Paint()..color = Colors.white.withValues(alpha: opacity),
+    );
+    canvas.restore();
   }
 
   Path _heartPath(double size) {
     final s = size / 24;
     return Path()
-      ..moveTo(12 * s, 20.6 * s)
-      ..cubicTo(9.1 * s, 18.2 * s, 3.1 * s, 13.8 * s, 3.1 * s, 8.9 * s)
-      ..cubicTo(3.1 * s, 5.9 * s, 5.3 * s, 3.7 * s, 8.1 * s, 3.7 * s)
-      ..cubicTo(9.9 * s, 3.7 * s, 11.3 * s, 4.7 * s, 12 * s, 6 * s)
-      ..cubicTo(12.7 * s, 4.7 * s, 14.1 * s, 3.7 * s, 15.9 * s, 3.7 * s)
-      ..cubicTo(18.7 * s, 3.7 * s, 20.9 * s, 5.9 * s, 20.9 * s, 8.9 * s)
-      ..cubicTo(20.9 * s, 13.8 * s, 14.9 * s, 18.2 * s, 12 * s, 20.6 * s)
+      ..moveTo(12 * s, 21.1 * s)
+      ..cubicTo(11.4 * s, 21.1 * s, 10.8 * s, 20.8 * s, 10.2 * s, 20.3 * s)
+      ..cubicTo(6.5 * s, 17.4 * s, 2.8 * s, 14.0 * s, 2.8 * s, 9.5 * s)
+      ..cubicTo(2.8 * s, 6.2 * s, 5.4 * s, 3.8 * s, 8.5 * s, 3.8 * s)
+      ..cubicTo(10.2 * s, 3.8 * s, 11.4 * s, 4.6 * s, 12 * s, 5.5 * s)
+      ..cubicTo(12.6 * s, 4.6 * s, 13.8 * s, 3.8 * s, 15.5 * s, 3.8 * s)
+      ..cubicTo(18.6 * s, 3.8 * s, 21.2 * s, 6.2 * s, 21.2 * s, 9.5 * s)
+      ..cubicTo(21.2 * s, 14.0 * s, 17.5 * s, 17.4 * s, 13.8 * s, 20.3 * s)
+      ..cubicTo(13.2 * s, 20.8 * s, 12.6 * s, 21.1 * s, 12 * s, 21.1 * s)
       ..close();
   }
 
@@ -168,7 +129,8 @@ class _BurstPainter extends CustomPainter {
   bool shouldRepaint(covariant _BurstPainter old) => old.progress != progress;
 }
 
-/// Small icon shown when the user pauses a video.
+/// Play mark shown while the video is paused: a bare glyph that scales in,
+/// no dark disc.
 class PauseOverlay extends StatelessWidget {
   const PauseOverlay({super.key, required this.visible});
 
@@ -179,25 +141,22 @@ class PauseOverlay extends StatelessWidget {
     return IgnorePointer(
       child: AnimatedOpacity(
         opacity: visible ? 1 : 0,
-        duration: durationNormal,
+        duration: durationFast,
         child: AnimatedScale(
-          scale: visible ? 1 : 1.25,
+          scale: visible ? 1 : 1.28,
           duration: durationNormal,
-          curve: ReelCurves.decelerate,
+          curve: Curves.easeOutCubic,
           child: Center(
-            child: Container(
-              width: 76,
-              height: 76,
+            child: DecoratedBox(
               decoration: const BoxDecoration(
-                color: Color(0x4D000000),
-                shape: BoxShape.circle,
+                boxShadow: [
+                  BoxShadow(color: Color(0x66000000), blurRadius: 22),
+                ],
               ),
-              child: const Center(
-                child: ReelIcon(
-                  ReelGlyph.play,
-                  size: 34,
-                  color: Color(0xE6FFFFFF),
-                ),
+              child: ReelIcon(
+                ReelGlyph.play,
+                size: 78,
+                color: Colors.white.withValues(alpha: 0.94),
               ),
             ),
           ),

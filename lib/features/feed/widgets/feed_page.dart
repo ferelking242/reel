@@ -189,33 +189,51 @@ class _FeedPageState extends ConsumerState<FeedPage> {
             left: 0,
             right: 0,
             bottom: 0,
-            child: Padding(
-              padding: EdgeInsets.only(
-                bottom: AppTokens.feedOverlayBottomInset +
-                    MediaQuery.paddingOf(context).bottom,
-              ),
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(
-                        left: space16,
-                        right: space12,
-                      ),
-                      child: FeedOverlayBottom(item: item),
+            child: IgnorePointer(
+              ignoring: !widget.isActive,
+              child: AnimatedOpacity(
+                opacity: widget.isActive ? 1 : 0,
+                duration: durationNormal,
+                curve: Curves.easeOut,
+                child: AnimatedSlide(
+                  offset: widget.isActive
+                      ? Offset.zero
+                      : const Offset(0, 0.10),
+                  duration: durationSlow,
+                  curve: ReelCurves.decelerate,
+                  child: Padding(
+                    padding: EdgeInsets.only(
+                      bottom: AppTokens.feedOverlayBottomInset +
+                          MediaQuery.paddingOf(context).bottom,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.end,
+                      children: [
+                        Expanded(
+                          child: Padding(
+                            padding: const EdgeInsets.only(
+                              left: space16,
+                              right: space12,
+                            ),
+                            child: FeedOverlayBottom(item: item),
+                          ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.only(
+                            right: space8,
+                            bottom: space8,
+                          ),
+                          child: FeedSidebar(
+                            item: item,
+                            isActive: widget.isActive,
+                            onOpenComments: widget.onOpenComments,
+                            onOpenShare: widget.onOpenShare,
+                          ),
+                        ),
+                      ],
                     ),
                   ),
-                  Padding(
-                    padding: const EdgeInsets.only(right: space8, bottom: space8),
-                    child: FeedSidebar(
-                      item: item,
-                      isActive: widget.isActive,
-                      onOpenComments: widget.onOpenComments,
-                      onOpenShare: widget.onOpenShare,
-                    ),
-                  ),
-                ],
+                ),
               ),
             ),
           ),
@@ -224,7 +242,11 @@ class _FeedPageState extends ConsumerState<FeedPage> {
               left: 0,
               right: 0,
               bottom: 0,
-              child: FeedProgressBar(player: _player!),
+              child: AnimatedOpacity(
+                opacity: widget.isActive ? 1 : 0,
+                duration: durationNormal,
+                child: FeedProgressBar(player: _player!),
+              ),
             ),
           PauseOverlay(visible: _pausedByUser || _holdPaused),
           if (_burstPosition != null)
@@ -284,7 +306,7 @@ class _FeedBackground extends StatelessWidget {
   }
 }
 
-class _VideoLayer extends StatelessWidget {
+class _VideoLayer extends StatefulWidget {
   const _VideoLayer({
     required this.player,
     required this.controller,
@@ -296,30 +318,67 @@ class _VideoLayer extends StatelessWidget {
   final Widget? poster;
 
   @override
+  State<_VideoLayer> createState() => _VideoLayerState();
+}
+
+class _VideoLayerState extends State<_VideoLayer> {
+  /// The poster stays up until the decoder actually produced a frame: no
+  /// spinner, exactly like the reference app.
+  bool _hasFrame = false;
+  StreamSubscription<Duration>? _positionSub;
+  StreamSubscription<bool>? _playingSub;
+
+  @override
+  void initState() {
+    super.initState();
+    _hasFrame = widget.player.state.position > Duration.zero;
+    _positionSub = widget.player.stream.position.listen((position) {
+      if (!_hasFrame && position > Duration.zero) {
+        setState(() => _hasFrame = true);
+      }
+    });
+    _playingSub = widget.player.stream.playing.listen((playing) {
+      if (!_hasFrame && playing) {
+        // Audio can start a hair before the first frame; reveal on the next
+        // tick instead of flashing a black rectangle.
+        Future<void>.delayed(const Duration(milliseconds: 120), () {
+          if (mounted && !_hasFrame) setState(() => _hasFrame = true);
+        });
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _positionSub?.cancel();
+    _playingSub?.cancel();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return StreamBuilder<bool>(
-      stream: player.stream.buffering,
-      initialData: true,
-      builder: (context, snapshot) {
-        final buffering = snapshot.data ?? true;
-        return Stack(
-          fit: StackFit.expand,
-          children: [
-            AnimatedOpacity(
-              opacity: buffering ? 0 : 1,
-              duration: durationNormal,
-              child: Video(
-                controller: controller,
-                controls: NoVideoControls,
-                fit: BoxFit.cover,
-                fill: Colors.transparent,
-              ),
-            ),
-            if (poster != null && buffering) poster!,
-            FeedBufferIndicator(visible: buffering),
-          ],
-        );
-      },
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        AnimatedOpacity(
+          opacity: _hasFrame ? 1 : 0,
+          duration: const Duration(milliseconds: 180),
+          curve: Curves.easeOut,
+          child: Video(
+            controller: widget.controller,
+            controls: NoVideoControls,
+            fit: BoxFit.cover,
+            fill: Colors.transparent,
+          ),
+        ),
+        if (widget.poster != null)
+          AnimatedOpacity(
+            opacity: _hasFrame ? 0 : 1,
+            duration: const Duration(milliseconds: 180),
+            curve: Curves.easeOut,
+            child: IgnorePointer(child: widget.poster),
+          ),
+      ],
     );
   }
 }

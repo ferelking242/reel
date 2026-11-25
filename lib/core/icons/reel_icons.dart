@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:material_symbols_icons/symbols.dart';
 
 import '../theme/tokens.dart';
+import 'tik_glyphs.dart';
 
 /// Glyphs used by the Reel UI.
 ///
@@ -164,7 +165,25 @@ class ReelIcon extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final resolved = color ?? IconTheme.of(context).color ?? Colors.white;
-    final icon = Icon(
+
+    // Hand-drawn glyphs (TikTok geometry) take precedence; the rest keeps the
+    // Material Symbols variable font.
+    final Widget icon = tikGlyphs.containsKey(glyph)
+        ? SizedBox(
+            width: size,
+            height: size,
+            child: CustomPaint(
+              painter: TikIconPainter(
+                glyph: glyph,
+                color: resolved,
+                filled: filled,
+                weight: strokeWidth == null
+                    ? 1
+                    : (strokeWidth! / 2.2).clamp(0.75, 1.6),
+              ),
+            ),
+          )
+        : Icon(
       _glyphData[glyph],
       size: size,
       color: resolved,
@@ -172,9 +191,9 @@ class ReelIcon extends StatelessWidget {
       weight: strokeWidth == null
           ? (filled ? 500 : 400)
           : (300 + strokeWidth! * 100).clamp(300, 700),
-      grade: 0,
-      opticalSize: size.clamp(20, 48),
-    );
+            grade: 0,
+            opticalSize: size.clamp(20, 48),
+          );
     if (semanticLabel == null) return icon;
     return Semantics(label: semanticLabel, child: icon);
   }

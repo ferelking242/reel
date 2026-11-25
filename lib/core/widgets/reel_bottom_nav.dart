@@ -125,7 +125,7 @@ class ReelBottomNav extends ConsumerWidget {
   }
 }
 
-class _NavButton extends StatelessWidget {
+class _NavButton extends StatefulWidget {
   const _NavButton({
     required this.item,
     required this.active,
@@ -145,7 +145,53 @@ class _NavButton extends StatelessWidget {
   final int badge;
 
   @override
+  State<_NavButton> createState() => _NavButtonState();
+}
+
+class _NavButtonState extends State<_NavButton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _controller = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 340),
+  );
+
+  late final Animation<double> _pop = TweenSequence<double>([
+    TweenSequenceItem(
+      tween: Tween(begin: 1.0, end: 0.86)
+          .chain(CurveTween(curve: Curves.easeOut)),
+      weight: 30,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 0.86, end: 1.10)
+          .chain(CurveTween(curve: Curves.easeOutCubic)),
+      weight: 35,
+    ),
+    TweenSequenceItem(
+      tween: Tween(begin: 1.10, end: 1.0)
+          .chain(CurveTween(curve: Curves.easeOut)),
+      weight: 35,
+    ),
+  ]).animate(_controller);
+
+  @override
+  void didUpdateWidget(covariant _NavButton oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (!oldWidget.active && widget.active) _controller.forward(from: 0);
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final item = widget.item;
+    final active = widget.active;
+    final showLabel = widget.showLabel;
+    final indicator = widget.indicator;
+    final badge = widget.badge;
     final color = active ? colorTextPrimary : colorTextTertiary;
 
     return Semantics(
@@ -155,8 +201,8 @@ class _NavButton extends StatelessWidget {
       child: GestureDetector(
         behavior: HitTestBehavior.opaque,
         onTap: () {
-          if (haptics) Haptics.tap();
-          onTap();
+          if (widget.haptics) Haptics.tap();
+          widget.onTap();
         },
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
@@ -164,10 +210,8 @@ class _NavButton extends StatelessWidget {
             Stack(
               clipBehavior: Clip.none,
               children: [
-                AnimatedScale(
-                  scale: active ? 1.0 : 0.94,
-                  duration: durationNormal,
-                  curve: ReelCurves.emphasized,
+                ScaleTransition(
+                  scale: _pop,
                   child: ReelIcon(
                     item.glyph,
                     size: iconNav,

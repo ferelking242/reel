@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:media_kit/media_kit.dart';
 
-import '../../../core/theme/tokens.dart';
 
 /// Thin, seekable progress bar pinned to the bottom of a feed page.
 class FeedProgressBar extends StatefulWidget {
@@ -118,33 +117,6 @@ class _FeedProgressBarState extends State<FeedProgressBar> {
           },
         );
       },
-    );
-  }
-}
-
-/// Buffer indicator shown while the first frames are loading.
-class FeedBufferIndicator extends StatelessWidget {
-  const FeedBufferIndicator({super.key, required this.visible});
-
-  final bool visible;
-
-  @override
-  Widget build(BuildContext context) {
-    return IgnorePointer(
-      child: AnimatedOpacity(
-        opacity: visible ? 1 : 0,
-        duration: durationNormal,
-        child: const Center(
-          child: SizedBox(
-            width: 26,
-            height: 26,
-            child: CircularProgressIndicator(
-              strokeWidth: 2.2,
-              color: Colors.white,
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

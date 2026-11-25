@@ -43,27 +43,12 @@ class FeedHeader extends ConsumerWidget {
               Expanded(
                 child: FittedBox(
                   fit: BoxFit.scaleDown,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      _FeedTab(
-                        label: 'Suivis',
-                        active: tab == 1,
-                        onTap: () {
-                          Haptics.tap();
-                          ref.read(feedTabProvider.notifier).update(1);
-                        },
-                      ),
-                      const SizedBox(width: space20),
-                      _FeedTab(
-                        label: 'Pour toi',
-                        active: tab == 0,
-                        onTap: () {
-                          Haptics.tap();
-                          ref.read(feedTabProvider.notifier).update(0);
-                        },
-                      ),
-                    ],
+                  child: _FeedTabs(
+                    activeTab: tab,
+                    onSelect: (value) {
+                      Haptics.tap();
+                      ref.read(feedTabProvider.notifier).update(value);
+                    },
                   ),
                 ),
               ),
@@ -127,6 +112,83 @@ class _LiveEntry extends StatelessWidget {
   }
 }
 
+/// « Suivis / Pour toi » with a single underline that slides between the two
+/// labels, like the reference app.
+class _FeedTabs extends StatelessWidget {
+  const _FeedTabs({required this.activeTab, required this.onSelect});
+
+  final int activeTab;
+  final ValueChanged<int> onSelect;
+
+  static const _gap = space20;
+
+  static double _measure(BuildContext context, String label, {bool bold = false}) {
+    final style = DefaultTextStyle.of(context).style.merge(
+          TextStyle(
+            fontSize: 16,
+            height: 1.2,
+            fontWeight: bold ? FontWeight.w700 : FontWeight.w500,
+          ),
+        );
+    final painter = TextPainter(
+      text: TextSpan(text: label, style: style),
+      textDirection: TextDirection.ltr,
+      maxLines: 1,
+    )..layout();
+    return painter.width;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    const labels = ['Suivis', 'Pour toi'];
+    final widths = [
+      for (var i = 0; i < labels.length; i++)
+        _measure(context, labels[i], bold: activeTab == i),
+    ];
+    final total = widths[0] + _gap + widths[1];
+    final activeCenter = activeTab == 0
+        ? widths[0] / 2
+        : widths[0] + _gap + widths[1] / 2;
+    // -1 (left edge) … 1 (right edge); the underline follows the label centre.
+    final alignX = ((activeCenter / total) * 2 - 1).clamp(-1.0, 1.0);
+
+    return Stack(
+      children: [
+        Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < labels.length; i++) ...[
+              if (i > 0) const SizedBox(width: _gap),
+              _FeedTab(
+                label: labels[i],
+                active: activeTab == i,
+                onTap: () => onSelect(i),
+              ),
+            ],
+          ],
+        ),
+        Positioned.fill(
+          child: IgnorePointer(
+            child: AnimatedAlign(
+              duration: durationNormal,
+              curve: ReelCurves.emphasized,
+              alignment: Alignment(alignX, 1),
+              child: Container(
+                width: 22,
+                height: 2,
+                decoration: const BoxDecoration(
+                  color: colorTextPrimary,
+                  borderRadius: BorderRadius.all(Radius.circular(1)),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _FeedTab extends StatelessWidget {
   const _FeedTab({
     required this.label,
@@ -146,34 +208,21 @@ class _FeedTab extends StatelessWidget {
       child: Semantics(
         button: true,
         selected: active,
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            AnimatedDefaultTextStyle(
-              duration: durationNormal,
-              style: DefaultTextStyle.of(context).style.merge(TextStyle(
-                color: active
-                    ? colorTextPrimary
-                    : colorTextPrimary.withValues(alpha: 0.62),
-                fontSize: 16,
-                height: 1.2,
-                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
-                shadows: AppTokens.feedTextShadow,
-              )),
-              child: Text(label),
-            ),
-            const SizedBox(height: space4),
-            AnimatedContainer(
-              duration: durationNormal,
-              curve: ReelCurves.emphasized,
-              height: 2,
-              width: active ? 22 : 0,
-              decoration: const BoxDecoration(
-                color: colorTextPrimary,
-                borderRadius: BorderRadius.all(Radius.circular(1)),
-              ),
-            ),
-          ],
+        child: Padding(
+          padding: const EdgeInsets.only(bottom: space6),
+          child: AnimatedDefaultTextStyle(
+            duration: durationNormal,
+            style: DefaultTextStyle.of(context).style.merge(TextStyle(
+              color: active
+                  ? colorTextPrimary
+                  : colorTextPrimary.withValues(alpha: 0.62),
+              fontSize: 16,
+              height: 1.2,
+              fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+              shadows: AppTokens.feedTextShadow,
+            )),
+            child: Text(label),
+          ),
         ),
       ),
     );
