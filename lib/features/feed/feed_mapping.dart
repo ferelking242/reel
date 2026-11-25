@@ -1,5 +1,6 @@
 import 'dart:convert';
 
+import '../../remote/json_safe.dart';
 import 'models/feed_item.dart';
 
 /// Builds a [FeedItem] from a raw Watchtower item payload.
@@ -13,35 +14,34 @@ FeedItem feedItemFromRaw(
   int index = 0,
 }) {
   var thumbnail = '';
-  final link = raw['link'] as String? ?? '';
+  final link = readText(raw['link']);
   if (link.startsWith('{')) {
     try {
       final parsed = json.decode(link) as Map<String, dynamic>;
-      thumbnail = parsed['poster'] as String? ?? '';
+      thumbnail = readText(parsed['poster']);
     } catch (_) {}
   }
   if (thumbnail.isEmpty) {
-    thumbnail = raw['imageUrl'] as String? ??
-        raw['cover'] as String? ??
-        raw['thumbnail'] as String? ??
-        raw['image'] as String? ??
-        '';
+    thumbnail = readText(
+      raw['imageUrl'] ?? raw['cover'] ?? raw['thumbnail'] ?? raw['image'],
+    );
   }
 
-  final title = raw['name'] as String? ??
-      raw['title'] as String? ??
-      raw['chapter_name'] as String? ??
-      'Sans titre';
-  final author =
-      raw['author'] as String? ?? raw['creator'] as String? ?? sourceName;
-  final genres = raw['genre'] as String? ??
-      raw['genres'] as String? ??
-      raw['tags'] as String? ??
-      (raw['description'] as String? ?? '');
-  final sound = raw['sound'] as String? ?? raw['music'] as String?;
+  final title = readText(
+    raw['name'] ?? raw['title'] ?? raw['chapter_name'],
+    'Sans titre',
+  );
+  final author = readText(raw['author'] ?? raw['creator'], sourceName);
+  final genres = readText(
+    raw['genre'] ??
+        raw['genres'] ??
+        raw['tags'] ??
+        raw['description'],
+  );
+  final sound = readTextOrNull(raw['sound'] ?? raw['music']);
 
   return FeedItem(
-    id: link.isNotEmpty ? link : (raw['url'] as String? ?? 'item_$index'),
+    id: link.isNotEmpty ? link : readText(raw['url'], 'item_$index'),
     videoUrl: videoUrl,
     thumbnailUrl: thumbnail,
     title: title,
@@ -108,7 +108,7 @@ String? videoUrlFromLink(String link) {
   try {
     final parsed = json.decode(link) as Map<String, dynamic>;
     for (final key in const ['hd', 'sd', 'url']) {
-      final value = parsed[key] as String?;
+      final value = readTextOrNull(parsed[key]);
       if (value != null && value.isNotEmpty) return value;
     }
   } catch (_) {}

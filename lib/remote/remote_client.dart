@@ -1,6 +1,7 @@
 import 'package:watchtower_client/watchtower_client.dart';
 import 'package:reel/utils/log/app_file_logger.dart';
 import 'package:reel/remote/app_version.dart';
+import 'package:reel/remote/json_safe.dart';
 import 'package:reel/remote/reel_transport.dart';
 
 /// Adaptateur mince sur [WatchtowerClient] (SDK officiel Watchtower).
@@ -18,13 +19,15 @@ class RemoteApiClient {
     required this.baseUrl,
     this.apiKey,
     ReelTransport? transport,
+    Duration timeout = const Duration(seconds: 12),
+    int maxRetries = 2,
   })  : _transport = transport,
         _client = transport == null
             ? WatchtowerClient(
                 url: baseUrl,
                 apiKey: apiKey,
-                timeout: const Duration(seconds: 20),
-                maxRetries: 3,
+                timeout: timeout,
+                maxRetries: maxRetries,
               )
             : null;
 
@@ -34,6 +37,23 @@ class RemoteApiClient {
   final ReelTransport? _transport;
 
   static const _tag = 'RemoteClient';
+
+  /// `true` when [error] means "the server did not answer" rather than "the
+  /// server answered with a problem". Those two need different UI: the first
+  /// must retry silently, the second must explain itself.
+  static bool isNetworkFailure(Object error) {
+    if (error is WatchtowerNetworkException) return true;
+    final text = error.toString().toLowerCase();
+    return text.contains('failed to reach') ||
+        text.contains('socketexception') ||
+        text.contains('connection refused') ||
+        text.contains('connection closed') ||
+        text.contains('timed out') ||
+        text.contains('timeout') ||
+        text.contains('failed host lookup') ||
+        text.contains('network is unreachable') ||
+        text.contains('clientexception');
+  }
 
   Future<Map<String, dynamic>> _get(
     String path, [
@@ -69,7 +89,8 @@ class RemoteApiClient {
   /// [List<Map<String,dynamic>>] pour ne pas casser [FeedNotifier._resolveSource].
   Future<List<dynamic>> sources() async {
     final payload = await sourcesPayload();
-    return payload['sources'] as List;
+    final list = payload['sources'];
+    return list is List ? list : const [];
   }
 
   /// Full `/api/sources` answer.
@@ -82,8 +103,8 @@ class RemoteApiClient {
     final data = await _get('/api/sources');
     final raw = data['sources'] ?? data['list'] ?? data['data'];
     return {
-      'sources': raw is List ? raw : const <dynamic>[],
-      'hiddenNsfw': (data['hiddenNsfw'] as num?)?.toInt() ?? 0,
+      'sources': raw is List ? readMapList(raw) : const <Map<String, dynamic>>[],
+      'hiddenNsfw': readInt(data['hiddenNsfw']),
     };
   }
 

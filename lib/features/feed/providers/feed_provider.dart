@@ -1,8 +1,10 @@
+import 'dart:async';
 import 'dart:math';
 
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/host/reel_host.dart';
+import '../../../remote/json_safe.dart';
 import '../../../remote/remote_client.dart';
 import '../../../remote/remote_config_provider.dart';
 import '../../../utils/log/app_file_logger.dart';
@@ -79,6 +81,12 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   static const int itemsPerPage = 8;
   static const int _maxSourcesToTry = 4;
 
+  /// How long the very first page may take before the feed gives up waiting and
+  /// shows itself empty. The request keeps running in the background.
+  static const Duration _firstLoadBudget = Duration(seconds: 10);
+  static const Duration _retryBaseDelay = Duration(seconds: 4);
+  static const Duration _retryMaxDelay = Duration(seconds: 30);
+
   int _page = 1;
   bool _hasMore = true;
   bool _isLoadingMore = false;
@@ -87,9 +95,20 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   String _sourceName = '';
   RemoteApiClient? _client;
 
+  Timer? _retryTimer;
+  int _retryAttempt = 0;
+  bool _disposed = false;
+  String _preferredSourceId = '';
+
   @override
   Future<List<FeedItem>> build() async {
     _reset();
+    _disposed = false;
+    _retryTimer?.cancel();
+    ref.onDispose(() {
+      _disposed = true;
+      _retryTimer?.cancel();
+    });
 
     final client = ref.watch(remoteClientProvider);
     if (client == null) {
@@ -97,9 +116,84 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       return const [];
     }
 
-    final config = await ref.read(remoteConfigProvider.future);
-    final items = await _loadFirstPage(client, config.selectedSourceId);
-    return items;
+    final config = await _readConfig();
+    _preferredSourceId = config.selectedSourceId;
+    return _boot(client, config.selectedSourceId);
+  }
+
+  /// Loads the first page, but never keeps the UI waiting on a silent server:
+  /// a slow or unreachable host yields an empty feed plus a background retry
+  /// instead of an endless skeleton.
+  Future<List<FeedItem>> _boot(
+    RemoteApiClient client,
+    String preferredSourceId,
+  ) async {
+    try {
+      return await _loadFirstPage(client, preferredSourceId)
+          .timeout(_firstLoadBudget);
+    } on TimeoutException {
+      _startSilentRetry('Le serveur ne répond pas encore');
+      return const [];
+    } catch (error) {
+      if (RemoteApiClient.isNetworkFailure(error)) {
+        _startSilentRetry('Serveur injoignable');
+        return const [];
+      }
+      rethrow;
+    }
+  }
+
+  Future<RemoteConfig> _readConfig() async {
+    try {
+      return await ref.read(remoteConfigProvider.future);
+    } catch (error) {
+      logger.error(_tag, 'Configuration illisible: $error');
+      return const RemoteConfig();
+    }
+  }
+
+  void _startSilentRetry(String reason) {
+    _retryAttempt = 0;
+    _scheduleRetry(reason);
+  }
+
+  void _scheduleRetry(String reason) {
+    if (_disposed) return;
+    final delay = _retryDelay(_retryAttempt);
+    _retryAttempt++;
+    _scheduleStatus(
+      '$reason — nouvelle tentative dans ${delay.inSeconds} s',
+    );
+    _retryTimer?.cancel();
+    _retryTimer = Timer(delay, _retryNow);
+  }
+
+  Duration _retryDelay(int attempt) {
+    final ms = _retryBaseDelay.inMilliseconds * (1 << attempt.clamp(0, 3));
+    return Duration(milliseconds: min(ms, _retryMaxDelay.inMilliseconds));
+  }
+
+  Future<void> _retryNow() async {
+    if (_disposed) return;
+    final client = ref.read(remoteClientProvider);
+    if (client == null) return;
+    try {
+      final items = await _loadFirstPage(client, _preferredSourceId)
+          .timeout(_firstLoadBudget);
+      if (_disposed) return;
+      _retryAttempt = 0;
+      state = AsyncData(items);
+    } on TimeoutException {
+      _scheduleRetry('Serveur injoignable');
+    } catch (error) {
+      if (_disposed) return;
+      if (RemoteApiClient.isNetworkFailure(error)) {
+        _scheduleRetry('Serveur injoignable');
+      } else {
+        _retryAttempt = 0;
+        state = AsyncError(error, StackTrace.current);
+      }
+    }
   }
 
   /// Riverpod forbids mutating other providers while this one builds, so the
@@ -189,12 +283,10 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       final payload =
           await client.sourcesPayload().timeout(const Duration(seconds: 15));
       _hiddenNsfw = payload['hiddenNsfw'] as int? ?? 0;
-      final raw = payload['sources'] as List;
-      final all = raw
-          .cast<Map<String, dynamic>>()
+      final all = readMapList(payload['sources'])
           .map((s) => (
-                id: s['id']?.toString() ?? '',
-                name: s['name']?.toString() ?? s['id']?.toString() ?? '',
+                id: readText(s['id']),
+                name: readText(s['name'], readText(s['id'])),
               ))
           .where((s) => s.id.isNotEmpty)
           .toList();
@@ -210,6 +302,9 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       return [...preferred, ...rest];
     } catch (error) {
       logger.log(_tag, 'Impossible de lister les sources: $error');
+      // An unreachable server must stay distinguishable from a server that
+      // answers "no sources": only the first case retries silently.
+      if (RemoteApiClient.isNetworkFailure(error)) rethrow;
       if (preferredSourceId.isEmpty) return const [];
       return [(id: preferredSourceId, name: preferredSourceId)];
     }
@@ -312,8 +407,20 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   }
 
   Future<void> refresh() async {
+    _retryTimer?.cancel();
+    _retryAttempt = 0;
     state = const AsyncValue.loading();
-    state = await AsyncValue.guard(build);
+    final client = ref.read(remoteClientProvider);
+    if (client == null) {
+      state = const AsyncData([]);
+      return;
+    }
+    final config = await _readConfig();
+    _preferredSourceId = config.selectedSourceId;
+    _reset();
+    state = await AsyncValue.guard(
+      () => _boot(client, config.selectedSourceId),
+    );
   }
 
   // ── Helpers ───────────────────────────────────────────────────────────────
@@ -374,10 +481,9 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
       if (chapters.isEmpty) return null;
 
       final episode = chapters.length == 1 ? chapters.first : chapters.last;
-      final episodeUrl = episode['url'] as String? ??
-          episode['link'] as String? ??
-          episode['chapterUrl'] as String? ??
-          '';
+      final episodeUrl = readText(
+        episode['url'] ?? episode['link'] ?? episode['chapterUrl'],
+      );
       if (episodeUrl.isEmpty) return null;
 
       final videoData = await client
@@ -393,13 +499,13 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     if (videos.isEmpty) return null;
     for (final quality in const ['1080', '720', '480']) {
       for (final video in videos) {
-        final label = (video['quality'] as String? ?? '').toLowerCase();
-        final url = video['url'] as String? ?? '';
+        final label = readText(video['quality']).toLowerCase();
+        final url = readText(video['url']);
         if (label.contains(quality) && url.isNotEmpty) return url;
       }
     }
     for (final video in videos) {
-      final url = video['url'] as String? ?? '';
+      final url = readText(video['url']);
       if (url.isNotEmpty) return url;
     }
     return null;

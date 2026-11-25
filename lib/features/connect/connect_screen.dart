@@ -3,13 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/host/reel_host.dart';
 import '../../core/icons/reel_icons.dart';
 import '../../core/theme/tokens.dart';
 import '../../core/widgets/pressable.dart';
 import '../../core/widgets/reel_sheet.dart';
 import '../../core/widgets/skeletons.dart';
+import '../../remote/json_safe.dart';
 import '../../remote/remote_client.dart';
 import '../../remote/remote_config_provider.dart';
+import '../../utils/log/app_file_logger.dart';
 import '../feed/providers/feed_provider.dart';
 
 class ConnectScreen extends ConsumerStatefulWidget {
@@ -38,8 +41,8 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     final q = _searchQuery.toLowerCase().trim();
     if (q.isEmpty) return _sources;
     return _sources.where((s) {
-      final name = (s['name'] as String? ?? '').toLowerCase();
-      final lang = (s['lang'] as String? ?? '').toLowerCase();
+      final name = readText(s['name']).toLowerCase();
+      final lang = readText(s['lang']).toLowerCase();
       return name.contains(q) || lang.contains(q);
     }).toList(growable: false);
   }
@@ -80,19 +83,25 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       _sources = [];
     });
 
+    var step = 'ping';
     try {
+      // Inside Watchtower the "server" is the host itself: testing it over
+      // HTTP would always fail, so the local transport answers instead.
+      final host = ref.read(reelHostProvider);
       final client = RemoteApiClient(
         baseUrl: url,
         apiKey: _keyCtrl.text.trim(),
+        transport: host?.transport,
+        timeout: const Duration(seconds: 10),
+        maxRetries: 1,
       );
 
       final result = await client.ping().timeout(const Duration(seconds: 12));
+      step = 'sources';
       final payload =
           await client.sourcesPayload().timeout(const Duration(seconds: 12));
-      final rawSources = payload['sources'] as List;
-      final hiddenNsfw = payload['hiddenNsfw'] as int? ?? 0;
-      final sources =
-          rawSources.whereType<Map<String, dynamic>>().toList(growable: false);
+      final hiddenNsfw = readInt(payload['hiddenNsfw']);
+      final sources = readMapList(payload['sources']);
       if (!mounted) return;
 
       setState(() {
@@ -112,21 +121,21 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
         };
         _sources = sources;
         final savedId = _selectedSourceId ?? kDefaultSourceId;
-        final exists = sources.any((s) => s['id']?.toString() == savedId);
+        final exists = sources.any((s) => readText(s['id']) == savedId);
         if (!exists && sources.isNotEmpty) {
           final preferred = sources.firstWhere(
-            (s) =>
-                (s['name'] as String? ?? '').toLowerCase().contains('redgif'),
+            (s) => readText(s['name']).toLowerCase().contains('redgif'),
             orElse: () => sources.first,
           );
-          _selectedSourceId = preferred['id']?.toString();
+          _selectedSourceId = readTextOrNull(preferred['id']);
         }
       });
     } catch (error) {
       if (!mounted) return;
+      logger.error('CONNECT', 'Test du serveur ($step) en échec: $error');
       setState(() {
         _testOk = false;
-        _testResult = 'Connexion impossible : ${_friendly(error)}';
+        _testResult = 'Connexion impossible ($step) : ${_friendly(error)}';
         _sources = [];
       });
     } finally {
@@ -173,6 +182,16 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   String _friendly(Object error) {
+    if (RemoteApiClient.isNetworkFailure(error)) {
+      return 'Serveur injoignable — vérifie que le Mode Distant est actif et '
+          'que tu es sur le même réseau (ou utilise le lien public).';
+    }
+    if (error is TypeError) {
+      // A malformed field must never read as "impossible de se connecter":
+      // the server answered, it just returned something unexpected.
+      return 'Le serveur a répondu dans un format inattendu '
+          '($error). Signale-le avec les journaux Watchtower.';
+    }
     final text = error.toString().replaceAll('Exception: ', '');
     if (text.contains('401')) {
       return 'Clé API refusée — copie la clé affichée dans Watchtower → '
@@ -713,9 +732,9 @@ class _SourcePicker extends StatelessWidget {
                         const Divider(height: 0.5, indent: 52),
                     itemBuilder: (context, index) {
                       final source = sources[index];
-                      final id = source['id']?.toString() ?? '';
-                      final name = source['name'] as String? ?? id;
-                      final lang = source['lang'] as String? ?? '';
+                      final id = readText(source['id']);
+                      final name = readText(source['name'], id);
+                      final lang = readText(source['lang']);
                       final nsfw = source['isNsfw'] == true;
                       final selected = id == selectedId;
 
@@ -830,7 +849,7 @@ class _SourceIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final iconUrl = source['iconUrl'] as String?;
+    final iconUrl = readTextOrNull(source['iconUrl']);
     if (iconUrl == null || iconUrl.isEmpty) {
       return Container(
         width: 28,
