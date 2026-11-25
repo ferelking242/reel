@@ -65,8 +65,15 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   Future<void> _test() async {
-    final url = _urlCtrl.text.trim();
+    final parsed = parseServerInput(_urlCtrl.text);
+    final url = parsed.url;
     if (url.isEmpty) return;
+    if (parsed.apiKey != null && _keyCtrl.text.trim().isEmpty) {
+      _keyCtrl.text = parsed.apiKey!;
+    }
+    if (url != _urlCtrl.text.trim()) {
+      _urlCtrl.text = url;
+    }
     setState(() {
       _testing = true;
       _testResult = null;
@@ -80,16 +87,29 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
       );
 
       final result = await client.ping().timeout(const Duration(seconds: 12));
-      final rawSources =
-          await client.sources().timeout(const Duration(seconds: 12));
+      final payload =
+          await client.sourcesPayload().timeout(const Duration(seconds: 12));
+      final rawSources = payload['sources'] as List;
+      final hiddenNsfw = payload['hiddenNsfw'] as int? ?? 0;
       final sources =
           rawSources.whereType<Map<String, dynamic>>().toList(growable: false);
       if (!mounted) return;
 
       setState(() {
         _testOk = true;
-        _testResult =
-            'Serveur joignable · ${sources.length} sources · version ${result["version"] ?? "?"}';
+        _testResult = switch ((sources.isEmpty, hiddenNsfw)) {
+          (true, final int hidden) when hidden > 0 =>
+            'Serveur joignable · $hidden source(s) masquée(s) : active '
+                '« Exposer les sources NSFW via l’API » dans Watchtower → '
+                'Mode Distant.',
+          (true, _) => 'Serveur joignable, mais aucune source active — active '
+              'une extension dans Watchtower (Sources) puis réessaie.',
+          (false, final int hidden) when hidden > 0 =>
+            'Serveur joignable · ${sources.length} sources · $hidden masquée(s) '
+                '(NSFW) · version ${result["version"] ?? "?"}',
+          _ => 'Serveur joignable · ${sources.length} sources · '
+              'version ${result["version"] ?? "?"}',
+        };
         _sources = sources;
         final savedId = _selectedSourceId ?? kDefaultSourceId;
         final exists = sources.any((s) => s['id']?.toString() == savedId);
@@ -115,7 +135,11 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
   }
 
   Future<void> _save() async {
-    final url = _urlCtrl.text.trim();
+    final parsed = parseServerInput(_urlCtrl.text);
+    final url = parsed.url;
+    final apiKey = _keyCtrl.text.trim().isNotEmpty
+        ? _keyCtrl.text.trim()
+        : (parsed.apiKey ?? '');
     if (url.isEmpty) {
       showReelToast(
         context,
@@ -128,7 +152,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     try {
       await ref.read(remoteConfigProvider.notifier).save(
             baseUrl: url,
-            apiKey: _keyCtrl.text.trim(),
+            apiKey: apiKey,
             selectedSourceId: _selectedSourceId ?? kDefaultSourceId,
           );
       await ref.read(feedItemsProvider.notifier).refresh();
@@ -150,6 +174,14 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
 
   String _friendly(Object error) {
     final text = error.toString().replaceAll('Exception: ', '');
+    if (text.contains('401')) {
+      return 'Clé API refusée — copie la clé affichée dans Watchtower → '
+          'Mode Distant (elle change si tu la régénères).';
+    }
+    if (text.contains('SocketException') || text.contains('Failed host lookup')) {
+      return 'Serveur injoignable — vérifie que le Mode Distant est actif et '
+          'que tu es sur le même réseau (ou utilise le lien public).';
+    }
     return text.length > 160 ? '${text.substring(0, 160)}…' : text;
   }
 

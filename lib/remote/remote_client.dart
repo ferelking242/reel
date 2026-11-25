@@ -68,14 +68,23 @@ class RemoteApiClient {
   /// Délègue à [WatchtowerClient.sources.list()] (typé) et reconvertit en
   /// [List<Map<String,dynamic>>] pour ne pas casser [FeedNotifier._resolveSource].
   Future<List<dynamic>> sources() async {
+    final payload = await sourcesPayload();
+    return payload['sources'] as List;
+  }
+
+  /// Full `/api/sources` answer.
+  ///
+  /// Carries `hiddenNsfw`: the number of active sources the server withholds
+  /// because NSFW exposure is off. Showing that count is what turns a blank
+  /// feed into an actionable message.
+  Future<Map<String, dynamic>> sourcesPayload() async {
     logger.log(_tag, 'GET /api/sources');
-    if (_transport != null) {
-      final data = await _get('/api/sources');
-      final raw = data['sources'] ?? data['list'] ?? data['data'] ?? data;
-      return raw is List ? raw : const [];
-    }
-    final list = _client!.sources.list();
-    return (await list).map((s) => s.toJson()).toList();
+    final data = await _get('/api/sources');
+    final raw = data['sources'] ?? data['list'] ?? data['data'];
+    return {
+      'sources': raw is List ? raw : const <dynamic>[],
+      'hiddenNsfw': (data['hiddenNsfw'] as num?)?.toInt() ?? 0,
+    };
   }
 
   // ── Contenu — via getRaw (conserve TOUS les champs de la réponse) ────────────

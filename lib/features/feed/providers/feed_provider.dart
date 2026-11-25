@@ -83,6 +83,7 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   bool _hasMore = true;
   bool _isLoadingMore = false;
   String _sourceId = '';
+  int _hiddenNsfw = 0;
   String _sourceName = '';
   RemoteApiClient? _client;
 
@@ -111,6 +112,7 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   }
 
   void _reset() {
+    _hiddenNsfw = 0;
     _page = 1;
     _hasMore = true;
     _isLoadingMore = false;
@@ -127,6 +129,13 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
   ) async {
     final candidates = await _candidateSources(client, preferredSourceId);
     if (candidates.isEmpty) {
+      if (_hiddenNsfw > 0) {
+        throw FeedException(
+          '$_hiddenNsfw source(s) masquée(s) par le serveur.',
+          details: 'Active « Exposer les sources NSFW via l\'API » dans '
+              'Watchtower → Mode Distant, puis reviens ici.',
+        );
+      }
       throw const FeedException(
         'Le serveur ne liste aucune source de contenu.',
         details: 'GET /api/sources a renvoyé une liste vide.',
@@ -177,7 +186,10 @@ class FeedNotifier extends AsyncNotifier<List<FeedItem>> {
     String preferredSourceId,
   ) async {
     try {
-      final raw = await client.sources().timeout(const Duration(seconds: 15));
+      final payload =
+          await client.sourcesPayload().timeout(const Duration(seconds: 15));
+      _hiddenNsfw = payload['hiddenNsfw'] as int? ?? 0;
+      final raw = payload['sources'] as List;
       final all = raw
           .cast<Map<String, dynamic>>()
           .map((s) => (
