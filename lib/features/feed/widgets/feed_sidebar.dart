@@ -36,10 +36,10 @@ class FeedSidebar extends ConsumerWidget {
     final following = engagement.isFollowing(item.authorUsername);
     final localComments = ref.watch(commentsProvider)[item.id]?.length ?? 0;
     final caps = ref.watch(uiContractValueProvider).capabilities;
-    final likeLabel = _countLabel(caps.likes, item.likes, liked ? 1 : 0);
-    final commentLabel =
-        _countLabel(caps.comments, item.comments, localComments);
-    final shareLabel = _countLabel(caps.shares, item.shares, 0);
+    final likeLabel = _countLabel(item.likes, liked ? 1 : 0);
+    final commentLabel = _countLabel(item.comments, localComments);
+    final shareLabel = _countLabel(item.shares, 0);
+    final saveLabel = _countLabel(item.bookmarks, saved ? 1 : 0);
 
     return SizedBox(
       width: AppTokens.sidebarWidth,
@@ -56,9 +56,8 @@ class FeedSidebar extends ConsumerWidget {
             },
           ),
           const SizedBox(height: space24),
-          if (caps.likes)
-            _SidebarAction(
-              glyph: ReelGlyph.heart,
+          _SidebarAction(
+            glyph: ReelGlyph.heart,
               label: likeLabel,
               active: liked,
               activeColor: colorLike,
@@ -69,18 +68,17 @@ class FeedSidebar extends ConsumerWidget {
                 if (nowLiked) Haptics.medium();
               },
             ),
-          if (caps.likes) const SizedBox(height: space20),
-          if (caps.comments)
-            _SidebarAction(
-              glyph: ReelGlyph.comment,
+          const SizedBox(height: space20),
+          _SidebarAction(
+            glyph: ReelGlyph.comment,
               label: commentLabel,
               semanticLabel: 'Commentaires',
               onTap: onOpenComments,
             ),
-          if (caps.comments) const SizedBox(height: space20),
+          const SizedBox(height: space20),
           _SidebarAction(
             glyph: ReelGlyph.bookmark,
-            label: _countLabel(true, item.bookmarks, saved ? 1 : 0),
+            label: saveLabel,
             active: saved,
             activeColor: colorWarning,
             semanticLabel:
@@ -96,10 +94,9 @@ class FeedSidebar extends ConsumerWidget {
               );
             },
           ),
-          if (caps.shares) const SizedBox(height: space20),
-          if (caps.shares)
-            _SidebarAction(
-              glyph: ReelGlyph.share,
+          const SizedBox(height: space20),
+          _SidebarAction(
+            glyph: ReelGlyph.share,
               label: shareLabel,
               semanticLabel: 'Partager',
               onTap: onOpenShare,
@@ -117,12 +114,11 @@ class FeedSidebar extends ConsumerWidget {
   }
 }
 
-/// Builds the label under an action: the real counter when the extension
-/// provides one, otherwise an empty label instead of a fabricated number.
-String _countLabel(bool supported, int? base, int localDelta) {
-  if (!supported || base == null) return '';
-  return formatCount(base + localDelta);
-}
+/// Builds the label under an action. Sources usually report no counter at all,
+/// so an unknown value falls back to 0: the rail keeps the reference app's
+/// rhythm instead of leaving a gap under an icon.
+String _countLabel(int? base, int localDelta) =>
+    formatCount((base ?? 0) + localDelta);
 
 class _AvatarWithFollow extends StatefulWidget {
   const _AvatarWithFollow({
@@ -432,16 +428,16 @@ class _SpinningDiscState extends State<_SpinningDisc>
       ),
       semanticLabel: 'Son : ${widget.item.soundName ?? ''}',
       child: SizedBox(
-        width: 46,
-        height: 46,
+        width: 48,
+        height: 48,
         child: Stack(
-          alignment: Alignment.center,
+          clipBehavior: Clip.none,
           children: [
             RotationTransition(
               turns: _controller,
               child: Container(
-                width: 46,
-                height: 46,
+                width: 48,
+                height: 48,
                 decoration: const BoxDecoration(
                   shape: BoxShape.circle,
                   gradient: LinearGradient(
@@ -450,30 +446,35 @@ class _SpinningDiscState extends State<_SpinningDisc>
                     colors: [Color(0xFF2A2A2E), Color(0xFF0A0A0B)],
                   ),
                   border: Border.fromBorderSide(
-                    BorderSide(color: Color(0xFF3A3A3E), width: 6),
+                    BorderSide(color: Color(0xFF3A3A3E), width: 4),
                   ),
                 ),
                 child: ClipOval(
                   child: ReelAvatar(
                     url: widget.item.authorAvatar,
                     name: widget.item.authorUsername,
-                    size: 34,
+                    size: 40,
                   ),
                 ),
               ),
             ),
-            Container(
-              width: 30,
-              height: 30,
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.55),
-                shape: BoxShape.circle,
-              ),
-              child: const Center(
-                child: ReelIcon(
-                  ReelGlyph.music,
-                  size: 15,
-                  color: Colors.white,
+            // The note badge sits on the rim, not over the avatar.
+            Positioned(
+              left: -3,
+              bottom: -3,
+              child: Container(
+                width: 21,
+                height: 21,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF0A0A0B),
+                  shape: BoxShape.circle,
+                ),
+                child: const Center(
+                  child: ReelIcon(
+                    ReelGlyph.music,
+                    size: 12,
+                    color: Colors.white,
+                  ),
                 ),
               ),
             ),

@@ -14,6 +14,7 @@ import '../fixtures/feed_fixture.dart';
 import 'package:reel/features/friends/friends_screen.dart';
 import 'package:reel/features/inbox/inbox_screen.dart';
 import 'package:reel/features/live/live_multi_screen.dart';
+import 'package:reel/features/profile/creator_screen.dart';
 import 'package:reel/features/profile/profile_screen.dart';
 import 'package:reel/features/search/search_results_screen.dart';
 import 'package:reel/features/search/search_screen.dart';
@@ -34,11 +35,19 @@ Future<void> _loadFont() async {
 
   // Package fonts are not loaded in widget tests; without this the icons
   // would all render as empty boxes in the goldens.
-  final symbols = File(
-    '${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev/'
-    'material_symbols_icons-4.2960.0/lib/fonts/MaterialSymbolsRounded.ttf',
+  final cache = Directory(
+    '${Platform.environment['HOME']}/.pub-cache/hosted/pub.dev',
   );
-  if (symbols.existsSync()) {
+  final symbols = cache.existsSync()
+      ? cache
+          .listSync()
+          .whereType<Directory>()
+          .where((dir) => dir.path.contains('material_symbols_icons-'))
+          .map((dir) => File('${dir.path}/lib/fonts/MaterialSymbolsRounded.ttf'))
+          .where((file) => file.existsSync())
+          .firstOrNull
+      : null;
+  if (symbols != null) {
     final iconLoader = FontLoader('packages/material_symbols_icons/MaterialSymbolsRounded');
     iconLoader.addFont(
       Future.value(ByteData.view(symbols.readAsBytesSync().buffer)),
@@ -127,5 +136,7 @@ void main() {
       // Capture the heart at full size, mid-hold.
       settle: const Duration(milliseconds: 60),
     );
+
+    await pumpScreen(const CreatorScreen(name: '@studio.nova'), '11_creator');
   });
 }

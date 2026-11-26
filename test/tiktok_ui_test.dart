@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 import 'package:reel/core/icons/reel_icons.dart';
 import 'package:reel/core/icons/tik_glyphs.dart';
 import 'package:reel/core/theme/tokens.dart';
@@ -9,6 +10,7 @@ import 'package:reel/features/feed/providers/feed_provider.dart';
 import 'package:reel/features/feed/widgets/feed_header.dart';
 import 'package:reel/features/feed/widgets/feed_page.dart';
 import 'package:reel/features/feed/widgets/like_burst.dart';
+import 'package:reel/features/profile/creator_screen.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'fixtures/feed_fixture.dart';
@@ -129,6 +131,80 @@ void main() {
       await tester.tap(find.text('Pour toi'));
       await tester.pump();
       expect(container.read(feedTabProvider), 0);
+      expect(tester.takeException(), isNull);
+    });
+  });
+
+  group('creator page', () {
+    testWidgets('swiping right to left opens the creator page',
+        (tester) async {
+      final router = GoRouter(
+        routes: [
+          GoRoute(
+            path: '/',
+            builder: (_, __) => Scaffold(
+              body: FeedPage(
+                item: fixtureFeedItems.first,
+                isActive: true,
+                onOpenComments: () {},
+                onOpenShare: () {},
+              ),
+            ),
+          ),
+          GoRoute(
+            path: '/creator',
+            builder: (_, state) =>
+                Text('creator:${state.uri.queryParameters['name']}'),
+          ),
+        ],
+      );
+      addTearDown(router.dispose);
+
+      await tester.pumpWidget(
+        ProviderScope(
+          child: MaterialApp.router(
+            routerConfig: router,
+            theme: ThemeData.dark().copyWith(
+              scaffoldBackgroundColor: colorBgBase,
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      await tester.fling(
+        find.byType(FeedPage),
+        const Offset(-320, 0),
+        1200,
+      );
+      await tester.pumpAndSettle();
+
+      expect(
+        find.text('creator:${fixtureFeedItems.first.authorUsername}'),
+        findsOneWidget,
+      );
+    });
+
+    testWidgets('the creator page lists that creator videos', (tester) async {
+      final container = ProviderContainer(
+        overrides: [feedItemsProvider.overrideWith(FixtureFeedNotifier.new)],
+      );
+      addTearDown(container.dispose);
+
+      await tester.pumpWidget(UncontrolledProviderScope(
+        container: container,
+        child: MaterialApp(
+          theme: ThemeData.dark().copyWith(
+            scaffoldBackgroundColor: colorBgBase,
+          ),
+          home: CreatorScreen(name: fixtureFeedItems.first.authorUsername),
+        ),
+      ));
+      await tester.pump(const Duration(milliseconds: 300));
+
+      expect(find.text('Vidéos'), findsNWidgets(2));
+      expect(find.text('1'), findsOneWidget);
+      expect(find.text("J'aime"), findsOneWidget);
       expect(tester.takeException(), isNull);
     });
   });

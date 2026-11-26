@@ -7,6 +7,7 @@ import '../features/feed/feed_screen.dart';
 import '../features/friends/friends_screen.dart';
 import '../features/inbox/inbox_screen.dart';
 import '../features/live/live_multi_screen.dart';
+import '../features/profile/creator_screen.dart';
 import '../features/profile/profile_screen.dart';
 import '../features/search/search_screen.dart';
 import '../features/settings/settings_screen.dart';
@@ -56,6 +57,14 @@ final _routes = <RouteBase>[
       pageBuilder: (context, state) => _slidePage(
         state,
         const ProfileScreen(),
+      ),
+    ),
+    GoRoute(
+      path: '/creator',
+      name: 'creator',
+      pageBuilder: (context, state) => _slidePage(
+        state,
+        CreatorScreen(name: state.uri.queryParameters['name'] ?? ''),
       ),
     ),
     GoRoute(

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:media_kit/media_kit.dart';
 import 'package:media_kit_video/media_kit_video.dart';
 
@@ -159,6 +160,17 @@ class _FeedPageState extends ConsumerState<FeedPage> {
               MediaQuery.sizeOf(context).height / 2,
             );
         _likeFromDoubleTap(position);
+      },
+      onHorizontalDragEnd: (details) {
+        final velocity = details.primaryVelocity ?? 0;
+        // Swipe right-to-left opens the creator's profile, like the reference
+        // app; the opposite direction is left to the host.
+        if (velocity < -200) {
+          Haptics.light();
+          context.push(
+            '/creator?name=${Uri.encodeComponent(widget.item.authorUsername)}',
+          );
+        }
       },
       onLongPressStart: (_) {
         if (_player == null) return;

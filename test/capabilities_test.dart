@@ -123,7 +123,7 @@ void main() {
     expect(item.authorVerified, isTrue);
   });
 
-  testWidgets('a source without likes or comments hides both actions',
+  testWidgets('a source without counters keeps the rail and shows zeros',
       (tester) async {
     await tester.pumpWidget(_wrap(
       FeedPage(
@@ -136,20 +136,23 @@ void main() {
     ));
     await tester.pump(const Duration(milliseconds: 300));
 
-    expect(
-      find.byWidgetPredicate(
-        (w) => w is ReelIcon && w.glyph == ReelGlyph.heart,
-      ),
-      findsNothing,
-    );
-    expect(
-      find.byWidgetPredicate(
-        (w) => w is ReelIcon && w.glyph == ReelGlyph.comment,
-      ),
-      findsNothing,
-    );
+    // The reference app always shows the rail; an extension that reports no
+    // counter leaves the icon in place with a 0 under it.
+    for (final glyph in [
+      ReelGlyph.heart,
+      ReelGlyph.comment,
+      ReelGlyph.bookmark,
+      ReelGlyph.share,
+    ]) {
+      expect(
+        find.byWidgetPredicate((w) => w is ReelIcon && w.glyph == glyph),
+        findsWidgets,
+        reason: 'missing $glyph',
+      );
+    }
     // Views are the only counter the extension exposes.
     expect(find.text('13 K'), findsOneWidget);
+    expect(find.text('0'), findsWidgets);
   });
 
   testWidgets('a full source keeps like and comment actions', (tester) async {

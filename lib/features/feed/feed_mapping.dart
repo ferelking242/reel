@@ -45,17 +45,53 @@ FeedItem feedItemFromRaw(
     videoUrl: videoUrl,
     thumbnailUrl: thumbnail,
     title: title,
-    authorUsername: '@${author.toLowerCase().replaceAll(' ', '_')}',
+    authorUsername: _authorLabel(
+      handle: readTextOrNull(
+        raw['username'] ??
+            raw['uniqueId'] ??
+            raw['handle'] ??
+            raw['uploaderId'] ??
+            raw['channelHandle'],
+      ),
+      channel: author,
+    ),
     authorAvatar: thumbnail,
     views: _count(raw, const ['views', 'viewCount', 'playCount', 'plays']),
     likes: _count(raw, const ['likes', 'likeCount']),
     comments: _count(raw, const ['comments', 'commentCount']),
     shares: _count(raw, const ['shares', 'shareCount']),
-    hashtags: parseTags(genres).take(4).toList(),
+    hashtags: _itemTags(title: title, genres: genres),
     soundName: sound,
     authorVerified: raw['verified'] == true,
     createdAt: _date(raw['createdAt'] ?? raw['uploadedAt']),
   );
+}
+
+/// A real handle keeps its « @ »; a channel name is shown the way the source
+/// spells it. Inventing a handle for every source name is what produced
+/// « @studio_nova » under the posts.
+String _authorLabel({String? handle, required String channel}) {
+  final clean = (handle ?? '').trim();
+  if (clean.isNotEmpty) {
+    final bare = clean.replaceFirst(RegExp(r'^@+'), '').replaceAll(' ', '');
+    if (bare.isNotEmpty) return '@$bare';
+  }
+  return channel.trim();
+}
+
+/// Hashtags from the title first, then the source genres — never a fabricated
+/// tag just to fill the line.
+List<String> _itemTags({required String title, required String genres}) {
+  final tags = <String>[];
+  for (final match
+      in RegExp(r'#([\p{L}\p{N}_]{2,30})', unicode: true).allMatches(title)) {
+    final tag = match.group(1)!;
+    if (!tags.contains(tag)) tags.add(tag);
+  }
+  for (final tag in parseTags(genres)) {
+    if (!tags.contains(tag)) tags.add(tag);
+  }
+  return tags.take(4).toList();
 }
 
 /// Reads a counter only when the extension really returned one.
@@ -94,7 +130,7 @@ List<Map<String, dynamic>> extractRawItems(Map<String, dynamic> data) {
 
 /// Splits a raw genre/tag string into hashtag-ready tokens.
 List<String> parseTags(String genreStr) {
-  if (genreStr.isEmpty) return const ['watchtower'];
+  if (genreStr.isEmpty) return const [];
   return genreStr
       .split(RegExp(r'[,|/·]'))
       .map((g) => g.trim().toLowerCase().replaceAll(' ', ''))
