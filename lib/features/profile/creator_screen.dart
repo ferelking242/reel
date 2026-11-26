@@ -60,7 +60,7 @@ class CreatorScreen extends ConsumerWidget {
               ),
             ),
             title: Text(
-              name.startsWith('@') ? name : '@$name',
+              name,
               style: AppTokens.titleS.copyWith(
                 color: colorTextPrimary,
                 fontSize: 17,
@@ -215,7 +215,7 @@ class _CreatorHeader extends StatelessWidget {
           ReelAvatar(url: avatar, name: name, size: 96),
           const SizedBox(height: space12),
           Text(
-            name.startsWith('@') ? name.substring(1) : name,
+            name,
             style: AppTokens.titleM.copyWith(color: colorTextPrimary),
             textAlign: TextAlign.center,
             maxLines: 2,
