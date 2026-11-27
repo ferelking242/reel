@@ -473,55 +473,64 @@ class _FeedSkeleton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return const Shimmer(
-      child: Stack(
-        fit: StackFit.expand,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              gradient: LinearGradient(
-                begin: Alignment.topCenter,
-                end: Alignment.bottomCenter,
-                colors: [Color(0xFF1A1A1C), Color(0xFF0B0B0C)],
+    // The shimmer wraps the shapes only: masking the whole screen turned the
+    // skeleton into a flat gradient where no placeholder could be seen.
+    return const Stack(
+      fit: StackFit.expand,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [Color(0xFF1A1A1C), Color(0xFF0B0B0C)],
+            ),
+          ),
+        ),
+        Shimmer(
+          baseColor: Color(0xFF232326),
+          highlightColor: Color(0xFF3C3C44),
+          child: Stack(
+            fit: StackFit.expand,
+            children: [
+              Positioned(
+                left: space16,
+                right: space16,
+                bottom: 120,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SkeletonBox(width: 140, height: 16),
+                    SizedBox(height: space10),
+                    SkeletonBox(width: 260, height: 12),
+                    SizedBox(height: space8),
+                    SkeletonBox(width: 200, height: 12),
+                    SizedBox(height: space16),
+                    SkeletonBox(width: 160, height: 12),
+                  ],
+                ),
               ),
-            ),
+              Positioned(
+                right: space12,
+                bottom: 120,
+                child: Column(
+                  children: [
+                    SkeletonBox(width: 50, height: 50, radius: 25),
+                    SizedBox(height: space24),
+                    SkeletonBox(width: 34, height: 34, radius: 17),
+                    SizedBox(height: space24),
+                    SkeletonBox(width: 34, height: 34, radius: 17),
+                    SizedBox(height: space24),
+                    SkeletonBox(width: 34, height: 34, radius: 17),
+                    SizedBox(height: space24),
+                    SkeletonBox(width: 46, height: 46, radius: 23),
+                  ],
+                ),
+              ),
+            ],
           ),
-          Positioned(
-            left: space16,
-            right: space16,
-            bottom: 120,
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                SkeletonBox(width: 140, height: 16),
-                SizedBox(height: space10),
-                SkeletonBox(width: 260, height: 12),
-                SizedBox(height: space8),
-                SkeletonBox(width: 200, height: 12),
-                SizedBox(height: space16),
-                SkeletonBox(width: 160, height: 12),
-              ],
-            ),
-          ),
-          Positioned(
-            right: space12,
-            bottom: 120,
-            child: Column(
-              children: [
-                SkeletonBox(width: 50, height: 50, radius: 25),
-                SizedBox(height: space24),
-                SkeletonBox(width: 34, height: 34, radius: 17),
-                SizedBox(height: space24),
-                SkeletonBox(width: 34, height: 34, radius: 17),
-                SizedBox(height: space24),
-                SkeletonBox(width: 34, height: 34, radius: 17),
-                SizedBox(height: space24),
-                SkeletonBox(width: 46, height: 46, radius: 23),
-              ],
-            ),
-          ),
-        ],
-      ),
+        ),
+      ],
     );
   }
 }

@@ -88,7 +88,7 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
     return Column(
       children: [
         ReelSheetHeader(
-          title: '$total commentaires',
+          title: '${formatCount(total)} commentaires',
           subtitle: comments.isEmpty
               ? 'Aucun commentaire pour le moment'
               : '${comments.length} depuis cet appareil',
@@ -406,7 +406,13 @@ class _EmojiRow extends StatelessWidget {
                 borderRadius: BorderRadius.circular(radiusPill),
               ),
               child: Center(
-                child: Text(emoji, style: const TextStyle(fontSize: 16)),
+                child: Text(
+                  emoji,
+                  style: const TextStyle(
+                    fontSize: 16,
+                    fontFamilyFallback: ['Noto Color Emoji', 'Apple Color Emoji'],
+                  ),
+                ),
               ),
             ),
           );

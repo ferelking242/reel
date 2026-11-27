@@ -36,6 +36,7 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
 
   List<Map<String, dynamic>> _sources = [];
   String? _selectedSourceId;
+  ProviderSubscription<AsyncValue<RemoteConfig>>? _configSub;
 
   List<Map<String, dynamic>> get _filteredSources {
     final q = _searchQuery.toLowerCase().trim();
@@ -57,10 +58,28 @@ class _ConnectScreenState extends ConsumerState<ConnectScreen> {
     if (config != null && config.isConfigured) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _test());
     }
+    // The config is read from disk asynchronously: without this the fields
+    // stayed empty on a screen that already said "Serveur connecté".
+    _configSub = ref.listenManual(remoteConfigProvider, (previous, next) {
+      final value = next.asData?.value;
+      if (value == null) return;
+      if (_urlCtrl.text.isEmpty && value.baseUrl.isNotEmpty) {
+        _urlCtrl.text = value.baseUrl;
+      }
+      if (_keyCtrl.text.isEmpty && value.apiKey.isNotEmpty) {
+        _keyCtrl.text = value.apiKey;
+      }
+      if (previous?.asData?.value == null && value.isConfigured) {
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) _test();
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _configSub?.close();
     _urlCtrl.dispose();
     _keyCtrl.dispose();
     _searchCtrl.dispose();

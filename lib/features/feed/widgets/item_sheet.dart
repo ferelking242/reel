@@ -34,6 +34,10 @@ class ItemSheet extends ConsumerWidget {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          const ReelSheetHeader(
+            title: 'Plus d’options',
+            padding: EdgeInsets.fromLTRB(0, space4, 0, space16),
+          ),
           Row(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
